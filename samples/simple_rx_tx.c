@@ -8,6 +8,7 @@
 LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 
 #define ROLE_TRANSMITTER 0   // set 1 for TX, 0 for RX
+#define ANCHOR_ID 1
 
 static dwt_config_t uwb_cfg = {
     .chan           = 9,
@@ -48,7 +49,7 @@ static int uwb_init(void){
         return -1;
     }
 
-    if(dwt_configure(&uwb_cfg) != DWT_SUCCESS){
+    if(dwt_configure(&uwb_cfg) != DWT_SUCCESS){     // configure input (defined on top)
         LOG_ERR("RADIO CONFIG FAILED");
         return -1;
     }
@@ -136,7 +137,8 @@ static void rx_loop(void){
                 ts = (ts << 8) | ts_raw[i];
             }
 
-            LOG_INF("RX [%d] ts=0x%08x%08x len=%d data: %02X %02X %02X",
+            LOG_INF("ANCHOR %d  RX [%d]  ts=0x%08x%08x  len=%d  data: %02X %02X %02X",
+                ANCHOR_ID,
                 rx_buffer[2],
                 (uint32_t)(ts >> 32),
                 (uint32_t)(ts & 0xFFFFFFFF),

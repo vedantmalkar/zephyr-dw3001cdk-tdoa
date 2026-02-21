@@ -7,7 +7,7 @@
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 
-#define ROLE_TRANSMITTER 0
+#define ROLE_TRANSMITTER 0   // set 1 for TX, 0 for RX
 
 static dwt_config_t uwb_cfg = {
     .chan           = 9,
@@ -28,9 +28,12 @@ static dwt_config_t uwb_cfg = {
 static uint8_t tx_msg[] = {0xAB, 0xCD, 0x00};
 
 static int uwb_init(void){
+
     dw_device_init();
+
     dw3000_hw_wakeup_pin_low();
     Sleep(5);
+
     port_set_dw_ic_spi_slowrate();
 
     if(dwt_probe((struct dwt_probe_s *)&dw3000_probe_interf) != DWT_SUCCESS){
@@ -57,73 +60,127 @@ static int uwb_init(void){
 }
 
 #if ROLE_TRANSMITTER
+
 static void tx_loop(void){
+
     uint8_t seq = 0;
+
+    uint8_t ts_raw[5];     // ADDED
+    uint64_t ts;           // ADDED
+
     while(1){
+
         tx_msg[2] = seq;
+
         dwt_writetxdata(sizeof(tx_msg), tx_msg, 0);
         dwt_writetxfctrl(sizeof(tx_msg) + FCS_LEN, 0, 0);
+
         dwt_starttx(DWT_START_TX_IMMEDIATE);
+
         while(!(dwt_readsysstatuslo() & DWT_INT_TXFRS_BIT_MASK));
+
+        // -------------------------
+        // ADDED PART: READ TX TIMESTAMP
+        // -------------------------
+
+        dwt_readtxtimestamp(ts_raw);
+
+        ts = 0;
+
+        for(int i = 4; i >= 0; i--){
+            ts = (ts << 8) | ts_raw[i];
+        }
+
+        LOG_INF("TX data send %d  ts=0x%08x%08x",
+            seq,
+            (uint32_t)(ts >> 32),
+            (uint32_t)(ts & 0xFFFFFFFF));
+
+        // -------------------------
+
         dwt_writesysstatuslo(DWT_INT_TXFRS_BIT_MASK);
-        LOG_INF("TX data send %d", seq);
+
         seq++;
+
         Sleep(500);
     }
 }
 
-#else 
+#else
+
 static void rx_loop(void){
+
     uint8_t rx_buffer[128];
     uint8_t ts_raw[5];
 
     while(1){
+
         dwt_rxenable(DWT_START_RX_IMMEDIATE);
+
         uint32_t status;
-        while(!((status = dwt_readsysstatuslo()) & (DWT_INT_RXFCG_BIT_MASK | SYS_STATUS_ALL_RX_ERR)));
-        
+
+        while(!((status = dwt_readsysstatuslo()) &
+              (DWT_INT_RXFCG_BIT_MASK | SYS_STATUS_ALL_RX_ERR)));
+
         if(status & DWT_INT_RXFCG_BIT_MASK){
+
             uint16_t len = dwt_getframelength();
+
             dwt_readrxdata(rx_buffer, len - FCS_LEN, 0);
+
             dwt_readrxtimestamp(ts_raw);
+
             uint64_t ts = 0;
 
             for(int i = 4; i >= 0; i--){
                 ts = (ts << 8) | ts_raw[i];
             }
 
-            LOG_INF("RX [%d]  ts=0x%02x%08x  len=%d  data: %02X %02X %02X",
+            LOG_INF("RX [%d] ts=0x%08x%08x len=%d data: %02X %02X %02X",
                 rx_buffer[2],
                 (uint32_t)(ts >> 32),
                 (uint32_t)(ts & 0xFFFFFFFF),
                 len - FCS_LEN,
-                rx_buffer[0], rx_buffer[1], rx_buffer[2]);
+                rx_buffer[0],
+                rx_buffer[1],
+                rx_buffer[2]);
         }
         else{
-            LOG_ERR("Reciving Error");
+            LOG_ERR("Receiving Error");
         }
 
-        dwt_writesysstatuslo(DWT_INT_RXFCG_BIT_MASK | SYS_STATUS_ALL_RX_ERR | SYS_STATUS_ALL_RX_TO);
+        dwt_writesysstatuslo(
+            DWT_INT_RXFCG_BIT_MASK |
+            SYS_STATUS_ALL_RX_ERR |
+            SYS_STATUS_ALL_RX_TO);
     }
 }
 
 #endif
 
+
 int main(void){
+
     LOG_INF("Starting up board");
 
     if(uwb_init() != 0){
+
         LOG_ERR("UWB STARTUP FAILED");
+
         return -1;
     }
 
     LOG_INF("STARTUP SUCCESS");
 
-    #if ROLE_TRANSMITTER 
-        tx_loop();
-    #else
-        rx_loop();
-    #endif
-    
+#if ROLE_TRANSMITTER
+
+    tx_loop();
+
+#else
+
+    rx_loop();
+
+#endif
+
     return 0;
 }

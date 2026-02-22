@@ -13,7 +13,7 @@ LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 #define SPEED_OF_LIGHT       299702547.0
 
 #define RESP_DELAY_UUS       1000
-#define UUS_TO_DWT_TIME      65536
+#define UUS_TO_DWT_TIME      63898
 
 #define MSG_POLL  0x01
 #define MSG_RESP  0x02
@@ -203,8 +203,4 @@ int main(void)
 #endif
 
     return 0;
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> 7c3140ce492850de624226ea28de4f5530dc41f3

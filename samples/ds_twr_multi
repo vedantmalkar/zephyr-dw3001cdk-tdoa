@@ -13,7 +13,7 @@ LOG_MODULE_REGISTER(ds_twr_multi, LOG_LEVEL_INF);
 #define ROLE_INITIATOR 1   // 1 = Tag, 0 = Anchor
 #define NODE_ID        0   // Tag = 0, Anchors = 1,2,3,...
 
-#define ANT_DLY 26194      // <-- Use your calibrated value
+#define ANT_DLY 26194     // <-- Use your calibrated value
 #define SPEED_OF_LIGHT 299702547.0
 #define UUS_TO_DWT_TIME 63898
 

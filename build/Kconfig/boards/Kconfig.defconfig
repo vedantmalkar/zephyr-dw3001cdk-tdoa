@@ -1,2 +1,0 @@
-# Load Zephyr board defconfig descriptions.
-osource "C:/ncs/v3.2.2/zephyr/boards/qorvo/decawave_dwm3001cdk/Kconfig.defconfig"

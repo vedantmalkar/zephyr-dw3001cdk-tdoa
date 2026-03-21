@@ -7,7 +7,7 @@
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 
-#define ROLE_TRANSMITTER 0   // set 1 for TX, 0 for RX
+#define ROLE_TRANSMITTER 1   // set 1 for TX, 0 for RX
 #define ANCHOR_ID 1
 
 static dwt_config_t uwb_cfg = {

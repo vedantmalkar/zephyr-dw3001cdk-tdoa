@@ -123,10 +123,11 @@ static void slave_loop(void)
 
             if(prev_tx != 0)
             {
-                uint64_t master_dt = tx_time - prev_tx;
-                uint64_t slave_dt  = rx_time - prev_rx;
+                uint64_t master_dt = (tx_time - prev_tx) & MASK40;
+                uint64_t slave_dt  = (rx_time - prev_rx) & MASK40;
 
-                drift = (double)master_dt / (double)slave_dt;
+                if(slave_dt != 0)
+                    drift = (double)master_dt / (double)slave_dt;
             }
 
             double corrected =

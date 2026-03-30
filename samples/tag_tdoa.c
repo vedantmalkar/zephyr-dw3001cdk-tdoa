@@ -62,28 +62,25 @@ static int uwb_init(void)
 static void tag_loop(void)
 {
     uint8_t tx_buf[2];
+    static uint8_t blink_seq = 0;
 
     while(1)
     {
         tx_buf[0] = MSG_BLINK;
-        tx_buf[1] = TAG_ID;
+        tx_buf[1] = blink_seq++;   // ✅ sequence number
 
-        /* Load frame */
         dwt_writetxdata(2, tx_buf, 0);
         dwt_writetxfctrl(2 + FCS_LEN, 0, 0);
 
-        /* Immediate TX */
         dwt_starttx(DWT_START_TX_IMMEDIATE);
 
-        /* Wait for TX done */
         while(!(dwt_readsysstatuslo() &
                DWT_INT_TXFRS_BIT_MASK));
 
         dwt_writesysstatuslo(DWT_INT_TXFRS_BIT_MASK);
 
-        LOG_INF("BLINK sent");
+        LOG_INF("BLINK sent seq=%d", tx_buf[1]);
 
-        /* Blink rate (adjustable) */
         k_msleep(100);  // 10 Hz
     }
 }

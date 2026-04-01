@@ -86,14 +86,6 @@ def process_packet(node_id, seq, master_time):
             dd = C * dt * DTU_TO_SEC
             print(f"Δt({ids[i]}-{ids[0]}) = {dt} DTU → {dd:.3f} m")
 
-        # Solve position
-        pos = compute_position(seq_data)
-
-        if pos:
-            print(f"📍 Position: x={pos[0]:.2f} m, y={pos[1]:.2f} m")
-        else:
-            print("⚠️ Position solve failed")
-
         # Cleanup
         del data_store[seq]
 

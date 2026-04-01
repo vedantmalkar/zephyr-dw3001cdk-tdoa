@@ -18,7 +18,7 @@ LOG_MODULE_REGISTER(ble_tdoa_slave, LOG_LEVEL_INF);
 
 /* -------------------------------------------------------------------------- */
 
-#define NODE_ID   6
+#define NODE_ID   10
 #define ANT_DLY   26194
 #define MSG_SYNC  0x10
 #define MSG_BLINK 0x20
@@ -222,7 +222,7 @@ static void uwb_rx_thread(void *a, void *b, void *c)
 
             if (prev_tx != 0) {
                 entry.corrected =
-                    ((double)rx_time - (double)offset) / drift;
+                    (double)prev_tx + ((double)rx_time - (double)prev_rx) * drift;
 
                 k_msgq_put(&tdoa_queue, &entry, K_NO_WAIT);
             }
@@ -251,8 +251,9 @@ static void uwb_rx_thread(void *a, void *b, void *c)
                     drift = (double)master_dt / (double)slave_dt;
             }
 
-            double corrected =
-                ((double)rx_time - (double)offset) / drift;
+            double corrected = (prev_tx != 0)
+                ? (double)prev_tx + ((double)rx_time - (double)prev_rx) * drift
+                : (double)tx_time;
 
             struct tdoa_entry entry = {
                 .id        = NODE_ID,

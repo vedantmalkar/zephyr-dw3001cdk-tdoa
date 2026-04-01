@@ -1,77 +1,65 @@
 import asyncio
 from bleak import BleakClient, BleakScanner
 from collections import defaultdict
-import math
+import numpy as np
+from scipy.optimize import least_squares
 
 DEVICE_NAME = "DWM3001-TDOA"
 UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
 
-# Constants
-C = 299792458                  # speed of light (m/s)
-DTU_TO_SEC = 15.65e-12         # DW3000 time unit
+C = 299792458.0
+DTU_TO_SEC = 15.65e-12
 
-# Anchor positions (meters)
 ANCHORS = {
-    6: (0.0, 0.0),
-    7: (5.0, 0.0),
-    10: (0.0, 5.0),
+    6: (0.0, 1.04),
+    7: (0.0, 0.0),
+    10: (0.5, 0.5),
 }
 
-# seq → {anchor_id: time}
 data_store = defaultdict(dict)
 
-# ------------------------------------------------------------------
+def tdoa_residuals(pos, anchor_positions, tdoa_meters):
+    x, y = pos
+    ref_pos = anchor_positions[0]
+    d_ref = np.sqrt((x - ref_pos[0])**2 + (y - ref_pos[1])**2)
+
+    residuals = []
+    for i in range(len(tdoa_meters)):
+        ai = anchor_positions[i + 1]
+        d_i = np.sqrt((x - ai[0])**2 + (y - ai[1])**2)
+        residuals.append((d_i - d_ref) - tdoa_meters[i])
+
+    return residuals
 
 def compute_position(seq_data):
-    """
-    TDOA solver (linearized, 3 anchors)
-    """
-
     if len(seq_data) < 3:
         return None
 
     ids = sorted(seq_data.keys())
-
     ref_id = ids[0]
     t_ref = seq_data[ref_id]
-    x1, y1 = ANCHORS[ref_id]
 
-    A = []
-    B = []
+    anchor_positions = [ANCHORS[ref_id]]
+    tdoa_meters = []
 
     for i in range(1, len(ids)):
         aid = ids[i]
-        t_i = seq_data[aid]
-        x2, y2 = ANCHORS[aid]
+        dt = seq_data[aid] - t_ref
+        dd = C * dt * DTU_TO_SEC
+        anchor_positions.append(ANCHORS[aid])
+        tdoa_meters.append(dd)
 
-        dt = (t_i - t_ref)   # in DTU
-        dd = C * dt * DTU_TO_SEC  # meters
+    x0 = np.mean([p[0] for p in anchor_positions])
+    y0 = np.mean([p[1] for p in anchor_positions])
 
-        A.append([
-            2*(x2 - x1),
-            2*(y2 - y1)
-        ])
+    result = least_squares(
+        tdoa_residuals, [x0, y0],
+        args=(anchor_positions, tdoa_meters)
+    )
 
-        B.append(
-            (x2**2 + y2**2 - x1**2 - y1**2) - dd**2
-        )
-
-    try:
-        A1, A2 = A[0], A[1]
-        B1, B2 = B[0], B[1]
-
-        det = A1[0]*A2[1] - A1[1]*A2[0]
-
-        if abs(det) < 1e-6:
-            return None
-
-        x = (B1*A2[1] - B2*A1[1]) / det
-        y = (A1[0]*B2 - A2[0]*B1) / det
-
-        return (x, y)
-
-    except:
-        return None
+    if result.success:
+        return (result.x[0], result.x[1])
+    return None
 
 # ------------------------------------------------------------------
 
@@ -152,7 +140,7 @@ async def connect_device(device):
 async def main():
 
     print("Scanning for anchors...")
-    devices = await BleakScanner.discover()
+    devices = await BleakScanner.discover(timeout=15)
 
     targets = []
 

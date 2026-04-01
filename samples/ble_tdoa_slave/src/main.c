@@ -18,7 +18,7 @@ LOG_MODULE_REGISTER(ble_tdoa_slave, LOG_LEVEL_INF);
 
 /* -------------------------------------------------------------------------- */
 
-#define NODE_ID   6
+#define NODE_ID   10
 #define ANT_DLY   26194
 #define MSG_SYNC  0x10
 #define MSG_BLINK 0x20
@@ -184,6 +184,7 @@ static void uwb_rx_thread(void *a, void *b, void *c)
     uint8_t  rx_buf[32];
     uint64_t prev_tx = 0;
     uint64_t prev_rx = 0;
+    uint64_t prev_prev_rx = 0;
     int64_t  offset  = 0;
     double   drift   = 1.0;
 
@@ -239,14 +240,15 @@ static void uwb_rx_thread(void *a, void *b, void *c)
                 tx_time |= ((uint64_t)rx_buf[3 + i]) << (8 * i);
             }
 
-            int64_t diff = (int64_t)((rx_time - tx_time) & MASK40);
-            if (diff > HALF40) diff -= FULL40;
+            if (prev_rx != 0) {
+                int64_t diff = (int64_t)((prev_rx - tx_time) & MASK40);
+                if (diff > HALF40) diff -= FULL40;
+                offset = diff;
+            }
 
-            offset = diff;
-
-            if (prev_tx != 0) {
+            if (prev_tx != 0 && prev_prev_rx != 0) {
                 uint64_t master_dt = (tx_time - prev_tx) & MASK40;
-                uint64_t slave_dt  = (rx_time - prev_rx) & MASK40;
+                uint64_t slave_dt  = (prev_rx - prev_prev_rx) & MASK40;
 
                 if (slave_dt != 0)
                     drift = (double)master_dt / (double)slave_dt;
@@ -268,6 +270,7 @@ static void uwb_rx_thread(void *a, void *b, void *c)
 
             k_msgq_put(&tdoa_queue, &entry, K_NO_WAIT);
 
+            prev_prev_rx = prev_rx;
             prev_tx = tx_time;
             prev_rx = rx_time;
         }

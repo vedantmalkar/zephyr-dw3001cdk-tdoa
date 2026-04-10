@@ -18,7 +18,7 @@ LOG_MODULE_REGISTER(ble_tdoa_slave, LOG_LEVEL_INF);
 
 /* -------------------------------------------------------------------------- */
 
-#define NODE_ID   10
+#define NODE_ID   0
 #define ANT_DLY   26194
 #define MSG_SYNC  0x10
 #define MSG_BLINK 0x20
@@ -33,6 +33,7 @@ struct tdoa_entry {
     uint8_t  id;
     uint8_t  type;
     uint8_t  seq;
+    uint8_t  sync_seq;
     uint64_t rx_ts;
     uint64_t tx_ts;
     int64_t  offset;
@@ -184,6 +185,7 @@ static void uwb_rx_thread(void *a, void *b, void *c)
     uint8_t  rx_buf[32];
     uint64_t prev_tx = 0;
     uint64_t prev_rx = 0;
+    uint8_t  prev_seq = 0;
     int64_t  offset  = 0;
     double   drift   = 1.0;
 
@@ -213,6 +215,7 @@ static void uwb_rx_thread(void *a, void *b, void *c)
                 .id        = NODE_ID,
                 .type      = MSG_BLINK,
                 .seq       = rx_buf[1],
+                .sync_seq  = 0,
                 .rx_ts     = rx_time,
                 .tx_ts     = 0,
                 .offset    = 0,
@@ -221,8 +224,11 @@ static void uwb_rx_thread(void *a, void *b, void *c)
             };
 
             if (prev_tx != 0) {
+                uint64_t slave_dt = (rx_time - prev_rx) & MASK40;
+                entry.sync_seq = prev_seq;
+                entry.tx_ts = prev_tx;
                 entry.corrected =
-                    (double)prev_tx + ((double)rx_time - (double)prev_rx) * drift;
+                    (double)prev_tx + (double)slave_dt * drift;
 
                 k_msgq_put(&tdoa_queue, &entry, K_NO_WAIT);
             }
@@ -259,6 +265,7 @@ static void uwb_rx_thread(void *a, void *b, void *c)
                 .id        = NODE_ID,
                 .type      = MSG_SYNC,
                 .seq       = seq,
+                .sync_seq  = seq,
                 .rx_ts     = rx_time,
                 .tx_ts     = tx_time,
                 .offset    = offset,
@@ -268,6 +275,7 @@ static void uwb_rx_thread(void *a, void *b, void *c)
 
             k_msgq_put(&tdoa_queue, &entry, K_NO_WAIT);
 
+            prev_seq = seq;
             prev_tx = tx_time;
             prev_rx = rx_time;
         }
@@ -314,9 +322,10 @@ int main(void)
                 entry.corrected);
         } else {
             len = snprintf(buf, sizeof(buf),
-                "BLINK,%u,%u,%llu,%.0f\n",
+                "BLINK,%u,%u,%u,%llu,%.0f\n",
                 entry.id, entry.seq,
-                entry.rx_ts, entry.corrected);
+                entry.sync_seq, entry.tx_ts,
+                entry.corrected);
         }
 
         printk("%s", buf);

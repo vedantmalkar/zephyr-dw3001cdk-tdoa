@@ -47,7 +47,7 @@ BLINK_GROUP_TTL_SEC = 5.0
 anchor_positions = {
     7: (0.0, 0.0),
     0: (0.9, 0.0),
-    6: (90.0, 60.0),
+    6: (.9, 0.6),
 }
 
 
@@ -406,11 +406,12 @@ async def main(scan_time: float, log_path: str):
 def entry():
     args = parse_args()
     global anchor_positions
-    try:
-        anchor_positions = parse_anchor_positions(args.anchor)
-    except ValueError as exc:
-        print(f"Argument error: {exc}")
-        sys.exit(2)
+    if args.anchor:
+        try:
+            anchor_positions = parse_anchor_positions(args.anchor)
+        except ValueError as exc:
+            print(f"Argument error: {exc}")
+            sys.exit(2)
     try:
         asyncio.run(main(args.scan_time, args.log))
     except KeyboardInterrupt:

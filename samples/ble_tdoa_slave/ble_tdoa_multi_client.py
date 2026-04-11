@@ -26,7 +26,6 @@ import csv
 import json
 import math
 import sys
-import time
 from datetime import datetime
 
 from bleak import BleakClient, BleakScanner
@@ -42,16 +41,18 @@ all_entries = []
 DWT_TIME_UNIT_S = 1.0 / (499.2e6 * 128.0)
 SPEED_OF_LIGHT_M_S = 299_792_458.0
 
-# Aggregate same BLINK observed by multiple anchors:
-# key = (sync_seq, blink_seq), value = {"t0": float, "anchors": {id: corrected}, "reported": int}
-blink_groups = {}
-BLINK_GROUP_TTL_SEC = 5.0
+# Aggregate same BLINK observed by multiple anchors.
+# Key = blink_seq only (uint8 set by the tag frame — identical on every anchor
+# that receives the same blink, regardless of which sync they last processed).
+# No TTL: a sequence number naturally overwrites its entry when the uint8 wraps
+# (~25 s at 10 Hz), so old groups never pile up.
+blink_groups = {}  # {blink_seq: {"anchors": {anchor_id: corrected}, "reported": int}}
 
 # Anchor geometry defaults: {anchor_id: (x_m, y_m)}.
 anchor_positions = {
     7: (0.0, 0.0),
     0: (0.9, 0.0),
-    6: (.9, 0.6),
+    6: (0.9, 0.6),
 }
 
 
@@ -94,15 +95,6 @@ def log_row(row: list):
     if csv_writer:
         csv_writer.writerow(row)
         csv_file.flush()
-
-
-def cleanup_blink_groups(now_sec: float):
-    expired = []
-    for key, group in blink_groups.items():
-        if now_sec - group["t0"] > BLINK_GROUP_TTL_SEC:
-            expired.append(key)
-    for key in expired:
-        del blink_groups[key]
 
 
 def solve_tdoa_2d(ref_id: int, ref_xy, obs):
@@ -165,13 +157,10 @@ def solve_tdoa_2d(ref_id: int, ref_xy, obs):
 
 
 def update_tdoa(ts: str, sync_seq: int, blink_seq: int, anchor_id: int, corrected: float):
-    now_sec = time.time()
-    cleanup_blink_groups(now_sec)
-
-    key = (sync_seq, blink_seq)
+    key = blink_seq
     group = blink_groups.get(key)
     if group is None:
-        group = {"t0": now_sec, "anchors": {}, "reported": 0}
+        group = {"anchors": {}, "reported": 0}
         blink_groups[key] = group
 
     group["anchors"][anchor_id] = corrected

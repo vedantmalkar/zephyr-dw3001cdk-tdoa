@@ -16,7 +16,7 @@ LOG_MODULE_REGISTER(tdoa_master, LOG_LEVEL_INF);
 #define ANT_DLY 26194
 
 #define MSG_SYNC 0x10
-#define SYNC_PERIOD_MS 10
+#define SYNC_PERIOD_MS 100
 #define UUS_TO_DWT_TIME 63898
 
 /* =============================================== */

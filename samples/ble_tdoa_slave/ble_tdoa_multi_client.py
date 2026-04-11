@@ -23,6 +23,7 @@ Usage:
 import asyncio
 import argparse
 import csv
+import json
 import math
 import sys
 import time
@@ -33,6 +34,9 @@ from bleak import BleakClient, BleakScanner
 DEVICE_NAME   = "DWM3001-TDOA"
 NUS_TX_UUID   = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
 RECONNECT_SEC = 5          # seconds to wait before reconnect attempt
+
+# Collects every printed entry so we can dump to JSON on exit.
+all_entries = []
 
 # DW3000 timestamp period in seconds.
 DWT_TIME_UNIT_S = 1.0 / (499.2e6 * 128.0)
@@ -195,6 +199,12 @@ def update_tdoa(ts: str, sync_seq: int, blink_seq: int, anchor_id: int, correcte
     print(f"[{ts}] [TDOA] sync={sync_seq:3d} blink={blink_seq:3d} ref=a{ref_id}  {delta_str}")
 
     for aid, dt_ticks, dt_ns in deltas:
+        all_entries.append({
+            "time": ts, "type": "TDOA",
+            "anchor_id": aid, "ref_anchor": ref_id,
+            "blink_seq": blink_seq, "sync_seq": sync_seq,
+            "delta_ticks": dt_ticks, "delta_ns": round(dt_ns, 3),
+        })
         log_row([
             ts, "", "TDOA", aid, blink_seq, sync_seq,
             "", "", "", "", "", "",
@@ -221,6 +231,12 @@ def update_tdoa(ts: str, sync_seq: int, blink_seq: int, anchor_id: int, correcte
                     f"[{ts}] [POS ] sync={sync_seq:3d} blink={blink_seq:3d}"
                     f"  x={x:.3f} m  y={y:.3f} m  rms={err:.4f} m"
                 )
+                all_entries.append({
+                    "time": ts, "type": "POS",
+                    "blink_seq": blink_seq, "sync_seq": sync_seq,
+                    "x_m": round(x, 3), "y_m": round(y, 3),
+                    "rms_m": round(err, 4),
+                })
                 log_row([
                     ts, "", "POS", "", blink_seq, sync_seq,
                     "", "", "", "", "", "",
@@ -279,6 +295,13 @@ async def handle_device(device, stop_event: asyncio.Event):
                     f"  offset={offset:+d}  drift={drift:.9f}"
                     f"  corrected={corrected:.0f}"
                 )
+                all_entries.append({
+                    "time": ts, "addr": addr, "type": "SYNC",
+                    "anchor_id": anchor_id, "seq": seq,
+                    "tx_ts": tx_ts, "rx_ts": rx_ts,
+                    "offset": offset, "drift": drift,
+                    "corrected": corrected,
+                })
                 log_row([
                     ts, addr, "SYNC", anchor_id, seq, "",
                     tx_ts, rx_ts, offset, drift, corrected, "",
@@ -304,6 +327,12 @@ async def handle_device(device, stop_event: asyncio.Event):
                     f"  bseq={blink_seq:3d}  sseq={sync_seq:3d}"
                     f"  sync_tx={sync_tx_ts}  master_time={master_time:.0f}"
                 )
+                all_entries.append({
+                    "time": ts, "addr": addr, "type": "BLINK",
+                    "anchor_id": anchor_id, "blink_seq": blink_seq,
+                    "sync_seq": sync_seq, "sync_tx_ts": sync_tx_ts,
+                    "master_time": master_time,
+                })
                 log_row([
                     ts, addr, "BLINK", anchor_id, blink_seq, sync_seq,
                     sync_tx_ts, "", "", "", "", master_time,
@@ -399,6 +428,12 @@ async def main(scan_time: float, log_path: str):
 
     if csv_file:
         csv_file.close()
+
+    if all_entries:
+        json_path = log_path.replace(".csv", ".json") if log_path else "tdoa_data.json"
+        with open(json_path, "w") as f:
+            json.dump(all_entries, f, indent=2)
+        print(f"Saved {len(all_entries)} entries to {json_path}")
 
     print("Done.")
 

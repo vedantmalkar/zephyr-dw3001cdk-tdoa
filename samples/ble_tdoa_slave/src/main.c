@@ -18,7 +18,7 @@ LOG_MODULE_REGISTER(ble_tdoa_slave, LOG_LEVEL_INF);
 
 /* -------------------------------------------------------------------------- */
 
-#define NODE_ID   0
+#define NODE_ID   6
 #define ANT_DLY   26194
 #define MSG_SYNC  0x10
 #define MSG_BLINK 0x20

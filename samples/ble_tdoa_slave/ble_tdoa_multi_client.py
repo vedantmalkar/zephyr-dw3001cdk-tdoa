@@ -181,12 +181,18 @@ def solve_tdoa_2d(ref_id: int, ref_xy, obs):
     return x, y, rms
 
 
-def update_tdoa(ts: str, sync_seq: int, blink_seq: int, anchor_id: int, corrected: float):
+def update_tdoa(ts: str, sync_seq: int, blink_seq: int, anchor_id: int, corrected: float, sync_tx: int = 0):
     key = blink_seq
     group = blink_groups.get(key)
     if group is None or group["reported"] > 0:
-        group = {"anchors": {}, "reported": 0}
+        group = {"anchors": {}, "reported": 0, "sync_tx": sync_tx}
         blink_groups[key] = group
+
+    # Reject anchors that used a different SYNC as reference -- their
+    # corrected timestamps are in a different frame and would produce
+    # wild TDOA deltas.
+    if sync_tx != 0 and group["sync_tx"] != 0 and sync_tx != group["sync_tx"]:
+        return
 
     group["anchors"][anchor_id] = corrected
     anchors = group["anchors"]
@@ -363,7 +369,7 @@ async def handle_device(device, stop_event: asyncio.Event):
                     sync_tx_ts, "", "", "", "", master_time,
                     "", "", ""
                 ])
-                update_tdoa(ts, sync_seq, blink_seq, anchor_id, master_time)
+                update_tdoa(ts, sync_seq, blink_seq, anchor_id, corrected=master_time, sync_tx=sync_tx_ts)
 
             else:
                 print(f"[{ts}] [{short}] WARN unknown: {line!r}")

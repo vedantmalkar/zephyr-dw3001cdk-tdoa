@@ -21,10 +21,12 @@ Usage:
 """
 
 import asyncio
+import atexit
 import argparse
 import csv
 import json
 import math
+import signal
 import sys
 from datetime import datetime
 
@@ -36,6 +38,29 @@ RECONNECT_SEC = 5          # seconds to wait before reconnect attempt
 
 # Collects every printed entry so we can dump to JSON on exit.
 all_entries = []
+_json_saved = False
+
+
+def _save_json():
+    global _json_saved
+    if _json_saved or not all_entries:
+        return
+    _json_saved = True
+    path = "tdoa_data.json"
+    with open(path, "w") as f:
+        json.dump(all_entries, f, indent=2)
+    print(f"\nSaved {len(all_entries)} entries to {path}")
+
+
+atexit.register(_save_json)
+
+
+def _sigint_handler(sig, frame):
+    _save_json()
+    sys.exit(0)
+
+
+signal.signal(signal.SIGINT, _sigint_handler)
 
 # DW3000 timestamp period in seconds.
 DWT_TIME_UNIT_S = 1.0 / (499.2e6 * 128.0)
@@ -418,12 +443,6 @@ async def main(scan_time: float, log_path: str):
     if csv_file:
         csv_file.close()
 
-    if all_entries:
-        json_path = log_path.replace(".csv", ".json") if log_path else "tdoa_data.json"
-        with open(json_path, "w") as f:
-            json.dump(all_entries, f, indent=2)
-        print(f"Saved {len(all_entries)} entries to {json_path}")
-
     print("Done.")
 
 
@@ -439,7 +458,7 @@ def entry():
     try:
         asyncio.run(main(args.scan_time, args.log))
     except KeyboardInterrupt:
-        print("\nStopped.")
+        pass
 
 
 if __name__ == "__main__":

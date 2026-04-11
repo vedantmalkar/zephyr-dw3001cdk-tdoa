@@ -184,15 +184,14 @@ def solve_tdoa_2d(ref_id: int, ref_xy, obs):
 def update_tdoa(ts: str, sync_seq: int, blink_seq: int, anchor_id: int, corrected: float, sync_tx: int = 0):
     key = blink_seq
     group = blink_groups.get(key)
-    if group is None or group["reported"] > 0:
+    if group is None:
         group = {"anchors": {}, "reported": 0, "sync_tx": sync_tx}
         blink_groups[key] = group
-
-    # Reject anchors that used a different SYNC as reference -- their
-    # corrected timestamps are in a different frame and would produce
-    # wild TDOA deltas.
-    if sync_tx != 0 and group["sync_tx"] != 0 and sync_tx != group["sync_tx"]:
-        return
+    elif sync_tx != 0 and group["sync_tx"] != 0 and sync_tx != group["sync_tx"]:
+        # Different sync reference means a new blink cycle for the same
+        # seq number (tag uint8 wrapped). Reset the group.
+        group = {"anchors": {}, "reported": 0, "sync_tx": sync_tx}
+        blink_groups[key] = group
 
     group["anchors"][anchor_id] = corrected
     anchors = group["anchors"]

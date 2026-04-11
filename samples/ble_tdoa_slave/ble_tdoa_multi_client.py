@@ -38,6 +38,7 @@ RECONNECT_SEC = 5          # seconds to wait before reconnect attempt
 
 # Collects every printed entry so we can dump to JSON on exit.
 all_entries = []
+quiet_mode = False
 _json_saved = False
 
 
@@ -90,6 +91,8 @@ def parse_args():
         "--anchor", action="append", default=[], metavar="ID:X,Y",
         help="Anchor position mapping, e.g. --anchor 10:0,0 (repeat for each anchor)"
     )
+    p.add_argument("--quiet", action="store_true",
+                   help="Only print position (x, y) output")
     return p.parse_args()
 
 
@@ -215,7 +218,8 @@ def update_tdoa(ts: str, sync_seq: int, blink_seq: int, anchor_id: int, correcte
         f"a{aid}={dt_ticks:+.0f} ticks ({dt_ns:+.3f} ns)"
         for aid, dt_ticks, dt_ns in deltas
     )
-    print(f"[{ts}] [TDOA] sync={sync_seq:3d} blink={blink_seq:3d} ref=a{ref_id}  {delta_str}")
+    if not quiet_mode:
+        print(f"[{ts}] [TDOA] sync={sync_seq:3d} blink={blink_seq:3d} ref=a{ref_id}  {delta_str}")
 
     for aid, dt_ticks, dt_ns in deltas:
         all_entries.append({
@@ -252,10 +256,13 @@ def update_tdoa(ts: str, sync_seq: int, blink_seq: int, anchor_id: int, correcte
                 margin = 2.0
                 if (min(all_x) - margin <= x <= max(all_x) + margin and
                         min(all_y) - margin <= y <= max(all_y) + margin):
-                    print(
-                        f"[{ts}] [POS ] sync={sync_seq:3d} blink={blink_seq:3d}"
-                        f"  x={x:.3f} m  y={y:.3f} m  rms={err:.4f} m"
-                    )
+                    if quiet_mode:
+                        print(f"{x:.3f}, {y:.3f}")
+                    else:
+                        print(
+                            f"[{ts}] [POS ] sync={sync_seq:3d} blink={blink_seq:3d}"
+                            f"  x={x:.3f} m  y={y:.3f} m  rms={err:.4f} m"
+                        )
                     all_entries.append({
                         "time": ts, "type": "POS",
                         "blink_seq": blink_seq, "sync_seq": sync_seq,
@@ -268,15 +275,17 @@ def update_tdoa(ts: str, sync_seq: int, blink_seq: int, anchor_id: int, correcte
                         ref_id, "", "", f"{x:.3f}", f"{y:.3f}", f"{err:.4f}"
                     ])
                 else:
+                    if not quiet_mode:
+                        print(
+                            f"[{ts}] [POS ] sync={sync_seq:3d} blink={blink_seq:3d}"
+                            f"  REJECTED x={x:.3f} y={y:.3f} (outside bounds)"
+                        )
+            else:
+                if not quiet_mode:
                     print(
                         f"[{ts}] [POS ] sync={sync_seq:3d} blink={blink_seq:3d}"
-                        f"  REJECTED x={x:.3f} y={y:.3f} (outside bounds)"
+                        f"  solver skipped ({err})"
                     )
-            else:
-                print(
-                    f"[{ts}] [POS ] sync={sync_seq:3d} blink={blink_seq:3d}"
-                    f"  solver skipped ({err})"
-                )
 
     group["reported"] = count
 
@@ -319,12 +328,13 @@ async def handle_device(device, stop_event: asyncio.Event):
                     print(f"[{ts}] [{short}] WARN parse error: {line!r}")
                     continue
 
-                print(
-                    f"[{ts}] [{short}] SYNC  a={anchor_id:3d}  seq={seq:4d}"
-                    f"  tx={tx_ts}  rx={rx_ts}"
-                    f"  offset={offset:+d}  drift={drift:.9f}"
-                    f"  corrected={corrected:.0f}"
-                )
+                if not quiet_mode:
+                    print(
+                        f"[{ts}] [{short}] SYNC  a={anchor_id:3d}  seq={seq:4d}"
+                        f"  tx={tx_ts}  rx={rx_ts}"
+                        f"  offset={offset:+d}  drift={drift:.9f}"
+                        f"  corrected={corrected:.0f}"
+                    )
                 all_entries.append({
                     "time": ts, "addr": addr, "type": "SYNC",
                     "anchor_id": anchor_id, "seq": seq,
@@ -352,11 +362,12 @@ async def handle_device(device, stop_event: asyncio.Event):
                     print(f"[{ts}] [{short}] WARN parse error: {line!r}")
                     continue
 
-                print(
-                    f"[{ts}] [{short}] BLINK a={anchor_id:3d}"
-                    f"  bseq={blink_seq:3d}  sseq={sync_seq:3d}"
-                    f"  sync_tx={sync_tx_ts}  master_time={master_time:.0f}"
-                )
+                if not quiet_mode:
+                    print(
+                        f"[{ts}] [{short}] BLINK a={anchor_id:3d}"
+                        f"  bseq={blink_seq:3d}  sseq={sync_seq:3d}"
+                        f"  sync_tx={sync_tx_ts}  master_time={master_time:.0f}"
+                    )
                 all_entries.append({
                     "time": ts, "addr": addr, "type": "BLINK",
                     "anchor_id": anchor_id, "blink_seq": blink_seq,
@@ -464,7 +475,8 @@ async def main(scan_time: float, log_path: str):
 
 def entry():
     args = parse_args()
-    global anchor_positions
+    global anchor_positions, quiet_mode
+    quiet_mode = args.quiet
     if args.anchor:
         try:
             anchor_positions = parse_anchor_positions(args.anchor)

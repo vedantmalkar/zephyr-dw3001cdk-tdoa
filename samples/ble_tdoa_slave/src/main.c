@@ -228,7 +228,7 @@ static void uwb_rx_thread(void *a, void *b, void *c)
                 entry.sync_seq = prev_seq;
                 entry.tx_ts = prev_tx;
                 entry.corrected =
-                    (double)prev_tx + (double)slave_dt * drift;
+                    (double)((uint64_t)((double)prev_tx + (double)slave_dt * drift) & MASK40);
 
                 k_msgq_put(&tdoa_queue, &entry, K_NO_WAIT);
             }
@@ -258,7 +258,7 @@ static void uwb_rx_thread(void *a, void *b, void *c)
             }
 
             double corrected = (prev_tx != 0)
-                ? (double)prev_tx + ((double)rx_time - (double)prev_rx) * drift
+                ? (double)((uint64_t)((double)prev_tx + ((double)rx_time - (double)prev_rx) * drift) & MASK40)
                 : (double)tx_time;
 
             struct tdoa_entry entry = {

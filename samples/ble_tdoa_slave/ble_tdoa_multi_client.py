@@ -184,7 +184,7 @@ def solve_tdoa_2d(ref_id: int, ref_xy, obs):
 def update_tdoa(ts: str, sync_seq: int, blink_seq: int, anchor_id: int, corrected: float):
     key = blink_seq
     group = blink_groups.get(key)
-    if group is None:
+    if group is None or group["reported"] > 0:
         group = {"anchors": {}, "reported": 0}
         blink_groups[key] = group
 
@@ -241,21 +241,32 @@ def update_tdoa(ts: str, sync_seq: int, blink_seq: int, anchor_id: int, correcte
         if len(obs) >= 2:
             x, y, err = solve_tdoa_2d(ref_id, anchor_positions[ref_id], obs)
             if x is not None:
-                print(
-                    f"[{ts}] [POS ] sync={sync_seq:3d} blink={blink_seq:3d}"
-                    f"  x={x:.3f} m  y={y:.3f} m  rms={err:.4f} m"
-                )
-                all_entries.append({
-                    "time": ts, "type": "POS",
-                    "blink_seq": blink_seq, "sync_seq": sync_seq,
-                    "x_m": round(x, 3), "y_m": round(y, 3),
-                    "rms_m": round(err, 4),
-                })
-                log_row([
-                    ts, "", "POS", "", blink_seq, sync_seq,
-                    "", "", "", "", "", "",
-                    ref_id, "", "", f"{x:.3f}", f"{y:.3f}", f"{err:.4f}"
-                ])
+                # Reject solutions far outside the anchor bounding box (2m margin)
+                all_x = [p[0] for p in anchor_positions.values()]
+                all_y = [p[1] for p in anchor_positions.values()]
+                margin = 2.0
+                if (min(all_x) - margin <= x <= max(all_x) + margin and
+                        min(all_y) - margin <= y <= max(all_y) + margin):
+                    print(
+                        f"[{ts}] [POS ] sync={sync_seq:3d} blink={blink_seq:3d}"
+                        f"  x={x:.3f} m  y={y:.3f} m  rms={err:.4f} m"
+                    )
+                    all_entries.append({
+                        "time": ts, "type": "POS",
+                        "blink_seq": blink_seq, "sync_seq": sync_seq,
+                        "x_m": round(x, 3), "y_m": round(y, 3),
+                        "rms_m": round(err, 4),
+                    })
+                    log_row([
+                        ts, "", "POS", "", blink_seq, sync_seq,
+                        "", "", "", "", "", "",
+                        ref_id, "", "", f"{x:.3f}", f"{y:.3f}", f"{err:.4f}"
+                    ])
+                else:
+                    print(
+                        f"[{ts}] [POS ] sync={sync_seq:3d} blink={blink_seq:3d}"
+                        f"  REJECTED x={x:.3f} y={y:.3f} (outside bounds)"
+                    )
             else:
                 print(
                     f"[{ts}] [POS ] sync={sync_seq:3d} blink={blink_seq:3d}"

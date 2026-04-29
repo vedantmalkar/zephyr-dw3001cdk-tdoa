@@ -1,4 +1,4 @@
-/* SLAVE ANCHOR */
+/* TDOA TAG (BLINK TRANSMITTER) */
 
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
@@ -8,16 +8,11 @@
 #include "dw3000_hw.h"
 #include "port.h"
 
-LOG_MODULE_REGISTER(tdoa_slave, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(tdoa_tag, LOG_LEVEL_INF);
 
-#define NODE_ID 2
 #define ANT_DLY 26194
-#define MSG_SYNC 0x10
-#define MSG_BLINK 0x20
 
-#define MASK40 0xFFFFFFFFFFULL
-#define HALF40 (1LL<<39)
-#define FULL40 (1LL<<40)
+#define MSG_BLINK 0x20
 
 static dwt_config_t config = {
     .chan = 9,
@@ -34,21 +29,6 @@ static dwt_config_t config = {
     .stsLength = DWT_STS_LEN_64,
     .pdoaMode = DWT_PDOA_M0,
 };
-
-/* RX timestamp */
-
-static uint64_t get_rx_ts(void)
-{
-    uint8_t ts[5];
-    dwt_readrxtimestamp(ts);
-
-    uint64_t val = 0;
-
-    for(int i=4;i>=0;i--)
-        val = (val<<8) | ts[i];
-
-    return val;
-}
 
 /* INIT */
 
@@ -72,125 +52,41 @@ static int uwb_init(void)
         return -1;
 
     dwt_settxantennadelay(ANT_DLY);
-    dwt_setrxantennadelay(ANT_DLY);
 
     return 0;
 }
-/* Time stamp converter for message receiving*/
-/* Convert local DW time → master time */
-static uint64_t local_to_master(uint64_t local,
-                               int64_t offset,
-                               double drift)
+
+/* BLINK LOOP */
+
+static void tag_loop(void)
 {
-    double corrected =
-        ((double)local - (double)offset) / drift;
-
-    return ((uint64_t)corrected) & MASK40;
-}
-/* SYNC RECEIVER */
-static void slave_loop(void)
-{
-    uint8_t rx_buf[32];
-
-    uint64_t prev_tx = 0;
-    uint64_t prev_rx = 0;
-
-    int64_t offset = 0;
-    double drift = 1.0;
+    uint8_t tx_buf[2];
+    static uint8_t blink_seq = 0;
 
     while(1)
     {
-        dwt_rxenable(DWT_START_RX_IMMEDIATE);
+        tx_buf[0] = MSG_BLINK;
+        tx_buf[1] = blink_seq++;
 
-        uint32_t status;
+        dwt_writetxdata(2, tx_buf, 0);
+        dwt_writetxfctrl(2 + FCS_LEN, 0, 0);
 
-        while(!((status=dwt_readsysstatuslo()) &
-              (DWT_INT_RXFCG_BIT_MASK |
-               SYS_STATUS_ALL_RX_ERR)));
+        dwt_starttx(DWT_START_TX_IMMEDIATE);
 
-        if(!(status & DWT_INT_RXFCG_BIT_MASK))
-        {
-            dwt_writesysstatuslo(
-                DWT_INT_RXFCG_BIT_MASK |
-                SYS_STATUS_ALL_RX_ERR);
-            continue;
-        }
+        while(!(dwt_readsysstatuslo() &
+               DWT_INT_TXFRS_BIT_MASK));
 
-        uint16_t len = dwt_getframelength();
-        dwt_readrxdata(rx_buf,len-FCS_LEN,0);
+        dwt_writesysstatuslo(DWT_INT_TXFRS_BIT_MASK);
 
-        uint64_t rx_time = get_rx_ts();
+        LOG_INF("BLINK sent seq=%u", tx_buf[1]);
 
-        /* ---------------- BLINK ---------------- */
-
-        if(rx_buf[0]==MSG_BLINK)
-        {
-            if(prev_tx == 0)
-            {
-                LOG_WRN("BLINK ignored: sync not ready");
-            }
-            else
-            {
-                uint64_t master_time =
-                    local_to_master(rx_time, offset, drift);
-
-                LOG_INF("BLINK,%llu,%llu",
-                        rx_time,
-                        master_time);
-            }
-        }
-
-        /* ---------------- SYNC ---------------- */
-
-        if(rx_buf[0]==MSG_SYNC)
-        {
-            uint8_t seq = rx_buf[1];
-
-            uint64_t tx_time = 0;
-
-            for(int i=0;i<5;i++)
-                tx_time |= ((uint64_t)rx_buf[3+i])<<(8*i);
-
-            int64_t diff = (int64_t)((rx_time - tx_time) & MASK40);
-
-            if(diff > HALF40)
-                diff -= FULL40;
-
-            offset = diff;
-
-            if(prev_tx != 0)
-            {
-                uint64_t master_dt = (tx_time - prev_tx) & MASK40;
-                uint64_t slave_dt  = (rx_time - prev_rx) & MASK40;
-
-                if(slave_dt != 0)
-                    drift = (double)master_dt / (double)slave_dt;
-            }
-
-            double corrected =
-                ((double)rx_time - (double)offset) / drift;
-
-            LOG_INF("SYNC,%u,%llu,%llu,%lld,%.9f,%.0f",
-                    seq,
-                    tx_time,
-                    rx_time,
-                    offset,
-                    drift,
-                    corrected);
-
-            prev_tx = tx_time;
-            prev_rx = rx_time;
-        }
-
-        dwt_writesysstatuslo(
-            DWT_INT_RXFCG_BIT_MASK |
-            SYS_STATUS_ALL_RX_ERR);
+        k_msleep(100);  // 10 Hz
     }
 }
 
 int main(void)
 {
-    LOG_INF("TDOA Slave Anchor Start");
+    LOG_INF("TDOA Tag Start");
 
     if(uwb_init()!=0)
     {
@@ -198,7 +94,7 @@ int main(void)
         return -1;
     }
 
-    slave_loop();
+    tag_loop();
 
     return 0;
 }

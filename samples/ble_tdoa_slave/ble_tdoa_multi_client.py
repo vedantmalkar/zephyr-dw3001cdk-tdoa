@@ -211,28 +211,42 @@ def update_tdoa(ts: str, sync_seq: int, blink_seq: int, anchor_id: int, correcte
         if aid == ref_id:
             continue
         dt_ticks = anchors[aid] - ref_ts
+        dt_s = dt_ticks * DWT_TIME_UNIT_S
         dt_ns = dt_ticks * DWT_TIME_UNIT_S * 1e9
-        deltas.append((aid, dt_ticks, dt_ns))
+        delta_m = dt_s * SPEED_OF_LIGHT_M_S
+        anchor_sep_m = None
+        if ref_id in anchor_positions and aid in anchor_positions:
+            x0, y0 = anchor_positions[ref_id]
+            x1, y1 = anchor_positions[aid]
+            anchor_sep_m = math.hypot(x1 - x0, y1 - y0)
+        deltas.append((aid, dt_ticks, dt_ns, delta_m, anchor_sep_m))
 
-    delta_str = "  ".join(
-        f"a{aid}={dt_ticks:+.0f} ticks ({dt_ns:+.3f} ns)"
-        for aid, dt_ticks, dt_ns in deltas
-    )
+    delta_parts = []
+    for aid, dt_ticks, dt_ns, delta_m, anchor_sep_m in deltas:
+        part = f"a{aid}={dt_ticks:+.0f} ticks ({dt_ns:+.3f} ns, dR={delta_m:+.4f} m"
+        if anchor_sep_m is not None:
+            part += f", sep={anchor_sep_m:.3f} m"
+        part += ")"
+        delta_parts.append(part)
+    delta_str = "  ".join(delta_parts)
     if not quiet_mode:
         print(f"[{ts}] [TDOA] sync={sync_seq:3d} blink={blink_seq:3d} ref=a{ref_id}  {delta_str}")
 
-    for aid, dt_ticks, dt_ns in deltas:
+    for aid, dt_ticks, dt_ns, delta_m, anchor_sep_m in deltas:
         all_entries.append({
             "time": ts, "type": "TDOA",
             "anchor_id": aid, "ref_anchor": ref_id,
             "blink_seq": blink_seq, "sync_seq": sync_seq,
             "delta_ticks": dt_ticks, "delta_ns": round(dt_ns, 3),
+            "delta_m": round(delta_m, 4),
+            "anchor_sep_m": round(anchor_sep_m, 3) if anchor_sep_m is not None else None,
         })
         log_row([
             ts, "", "TDOA", aid, blink_seq, sync_seq,
             "", "", "", "", "", "",
             ref_id, f"{dt_ticks:.0f}", f"{dt_ns:.3f}",
-            "", "", ""
+            "", "", "", f"{delta_m:.4f}",
+            f"{anchor_sep_m:.3f}" if anchor_sep_m is not None else ""
         ])
 
     # Multilateration from 3+ anchors with known coordinates.
@@ -272,7 +286,8 @@ def update_tdoa(ts: str, sync_seq: int, blink_seq: int, anchor_id: int, correcte
                     log_row([
                         ts, "", "POS", "", blink_seq, sync_seq,
                         "", "", "", "", "", "",
-                        ref_id, "", "", f"{x:.3f}", f"{y:.3f}", f"{err:.4f}"
+                        ref_id, "", "", f"{x:.3f}", f"{y:.3f}", f"{err:.4f}",
+                        "", ""
                     ])
                 else:
                     if not quiet_mode:
@@ -345,7 +360,7 @@ async def handle_device(device, stop_event: asyncio.Event):
                 log_row([
                     ts, addr, "SYNC", anchor_id, seq, "",
                     tx_ts, rx_ts, offset, drift, corrected, "",
-                    "", "", ""
+                    "", "", "", "", "", "", "", ""
                 ])
 
             elif parts[0] == "BLINK":
@@ -377,7 +392,7 @@ async def handle_device(device, stop_event: asyncio.Event):
                 log_row([
                     ts, addr, "BLINK", anchor_id, blink_seq, sync_seq,
                     sync_tx_ts, "", "", "", "", master_time,
-                    "", "", ""
+                    "", "", "", "", "", "", "", ""
                 ])
                 update_tdoa(ts, sync_seq, blink_seq, anchor_id, corrected=master_time, sync_tx=sync_tx_ts)
 
@@ -428,12 +443,12 @@ async def main(scan_time: float, log_path: str):
             csv_writer.writerow([
                 "time", "addr", "type", "anchor_id", "seq", "sync_seq",
                 "tx_ts", "rx_ts", "offset", "drift", "corrected", "master_time",
-                "ref_anchor", "delta_ticks", "delta_ns", "x_m", "y_m", "rms_m"
+                "ref_anchor", "delta_ticks", "delta_ns", "x_m", "y_m", "rms_m",
+                "delta_m", "anchor_sep_m"
             ])
         print(f"Logging to {log_path}")
 
     # ---- Scan ----
-    print(f"Scanning {scan_time}s for '{DEVICE_NAME}' devices ...")
     found = {}
 
     def detection_cb(device, adv_data):
@@ -442,12 +457,12 @@ async def main(scan_time: float, log_path: str):
             found[device.address] = device
             print(f"  Found: [{device.address}]  RSSI={adv_data.rssi} dBm")
 
-    async with BleakScanner(detection_callback=detection_cb):
-        await asyncio.sleep(scan_time)
-
-    if not found:
-        print(f"No '{DEVICE_NAME}' devices found. Is the firmware flashed and advertising?")
-        sys.exit(1)
+    while not found:
+        print(f"Scanning {scan_time}s for '{DEVICE_NAME}' devices ...")
+        async with BleakScanner(detection_callback=detection_cb):
+            await asyncio.sleep(scan_time)
+        if not found:
+            print(f"No '{DEVICE_NAME}' devices found yet. Retrying scan...")
 
     print(f"\nFound {len(found)} device(s). Connecting to all ...\n")
 

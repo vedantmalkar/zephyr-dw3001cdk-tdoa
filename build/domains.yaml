@@ -1,7 +1,0 @@
-default: zephyr-dw3001cdk-tdoa
-build_dir: C:/ncs/SDK_ASS/Examples/ncs-fund/zephyr-dw3001cdk-tdoa/build
-domains:
-  - name: zephyr-dw3001cdk-tdoa
-    build_dir: C:/ncs/SDK_ASS/Examples/ncs-fund/zephyr-dw3001cdk-tdoa/build/zephyr-dw3001cdk-tdoa
-flash_order:
-  - zephyr-dw3001cdk-tdoa

@@ -9,8 +9,8 @@ add_subdirectory(drivers/dw3000)
 
 target_include_directories(app PRIVATE
     drivers/dw3000/inc
-    drivers/platform    
-    # lib/sit
+    drivers/platform
+    lib/uwb
 )
   
 # target_link_libraries(app PRIVATE
@@ -23,7 +23,5 @@ target_sources(app PRIVATE
     drivers/platform/dw3000_hw.c
     drivers/platform/port.c
     drivers/platform/deca_port.c
-    # lib/sit/sit.c
-    # lib/sit/sit_device.c
-    # lib/sit/sit_config.c
+    lib/uwb/uwb.c
 )

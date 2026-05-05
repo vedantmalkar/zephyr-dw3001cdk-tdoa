@@ -1,23 +1,6 @@
 /*
- * BLE Slave Timestamp Streamer — DWM3001CDK
- *
- * Receives UWB sync packets from the master anchor (wireless_time_sync_master),
- * computes RX timestamp, clock offset and drift exactly as wireless_time_sync_slave,
- * and streams each result to a connected laptop over BLE (NUS TX notify) as well
- * as the serial console.
- *
- * Packet format sent over BLE and serial (CSV):
- *   "seq,tx_ts,rx_ts,offset,drift,corrected\n"
- *
- * Architecture:
- *   uwb_rx_thread  — waits for MSG_SYNC frames, computes timestamps → msgq
- *   main thread    — BLE init + advertising + dequeue → notify + printk
- *
- * Pair with: samples/wireless_time_sync_master (flash on a second board)
- *
- * Build:
- *   cd samples/ble_slave_timestamps
- *   west build -b decawave_dwm3001cdk
+ * BLE Slave Timestamp Streamer 
+ * Pair this with: flash samples/wireless_time_sync_master on a second board.
  */
 
 #include <zephyr/kernel.h>
@@ -34,10 +17,6 @@
 
 LOG_MODULE_REGISTER(ble_slave, LOG_LEVEL_INF);
 
-/* --------------------------------------------------------------------------
- * Slave config (matches wireless_time_sync_slave.c)
- * -------------------------------------------------------------------------- */
-
 #define NODE_ID   2
 #define ANT_DLY   26194
 #define MSG_SYNC  0x10
@@ -45,10 +24,6 @@ LOG_MODULE_REGISTER(ble_slave, LOG_LEVEL_INF);
 #define MASK40  0xFFFFFFFFFFULL
 #define HALF40  (1LL << 39)
 #define FULL40  (1LL << 40)
-
-/* --------------------------------------------------------------------------
- * Message queue — UWB RX thread → main/BLE thread
- * -------------------------------------------------------------------------- */
 
 struct slave_entry {
 	uint8_t  seq;
@@ -61,10 +36,6 @@ struct slave_entry {
 
 K_MSGQ_DEFINE(slave_queue, sizeof(struct slave_entry), 32, 4);
 
-/* --------------------------------------------------------------------------
- * NUS UUIDs
- * -------------------------------------------------------------------------- */
-
 #define BT_UUID_NUS_VAL \
 	BT_UUID_128_ENCODE(0x6E400001, 0xB5A3, 0xF393, 0xE0A9, 0xE50E24DCCA9EULL)
 #define BT_UUID_NUS_TX_VAL \
@@ -73,16 +44,8 @@ K_MSGQ_DEFINE(slave_queue, sizeof(struct slave_entry), 32, 4);
 static struct bt_uuid_128 nus_uuid    = BT_UUID_INIT_128(BT_UUID_NUS_VAL);
 static struct bt_uuid_128 nus_tx_uuid = BT_UUID_INIT_128(BT_UUID_NUS_TX_VAL);
 
-/* --------------------------------------------------------------------------
- * BLE state
- * -------------------------------------------------------------------------- */
-
 static struct bt_conn *current_conn;
 static bool notify_enabled;
-
-/* --------------------------------------------------------------------------
- * GATT
- * -------------------------------------------------------------------------- */
 
 static void tx_ccc_changed(const struct bt_gatt_attr *attr, uint16_t value)
 {
@@ -101,10 +64,6 @@ BT_GATT_SERVICE_DEFINE(nus_svc,
 
 #define TX_ATTR (&nus_svc.attrs[1])
 
-/* --------------------------------------------------------------------------
- * Advertising
- * -------------------------------------------------------------------------- */
-
 static const struct bt_le_adv_param adv_param =
 	BT_LE_ADV_PARAM_INIT(BT_LE_ADV_OPT_CONN,
 			     BT_GAP_ADV_FAST_INT_MIN_2,
@@ -121,10 +80,6 @@ static const struct bt_data sd[] = {
 		sizeof(CONFIG_BT_DEVICE_NAME) - 1),
 };
 
-/* --------------------------------------------------------------------------
- * MTU exchange
- * -------------------------------------------------------------------------- */
-
 static void mtu_exchange_cb(struct bt_conn *conn, uint8_t err,
 			    struct bt_gatt_exchange_params *params)
 {
@@ -138,10 +93,6 @@ static void mtu_exchange_cb(struct bt_conn *conn, uint8_t err,
 static struct bt_gatt_exchange_params mtu_params = {
 	.func = mtu_exchange_cb,
 };
-
-/* --------------------------------------------------------------------------
- * Connection callbacks
- * -------------------------------------------------------------------------- */
 
 static void connected(struct bt_conn *conn, uint8_t err)
 {
@@ -167,10 +118,6 @@ BT_CONN_CB_DEFINE(conn_cb) = {
 	.connected    = connected,
 	.disconnected = disconnected,
 };
-
-/* --------------------------------------------------------------------------
- * DW3000 config and init
- * -------------------------------------------------------------------------- */
 
 static dwt_config_t uwb_cfg = {
 	.chan           = 9,
@@ -233,10 +180,6 @@ static uint64_t get_rx_ts(void)
 	return val;
 }
 
-/* --------------------------------------------------------------------------
- * UWB RX thread — slave sync receiver, mirrors wireless_time_sync_slave logic
- * -------------------------------------------------------------------------- */
-
 #define UWB_STACK_SIZE 4096
 #define UWB_PRIORITY   5
 
@@ -246,7 +189,7 @@ static void uwb_rx_thread(void *a, void *b, void *c)
 	ARG_UNUSED(b);
 	ARG_UNUSED(c);
 
-	LOG_INF("UWB RX thread started — waiting for master sync packets");
+	LOG_INF("UWB RX thread started");
 
 	uint8_t  rx_buf[32];
 	uint64_t prev_tx = 0;
@@ -326,10 +269,6 @@ static void uwb_rx_thread(void *a, void *b, void *c)
 K_THREAD_STACK_DEFINE(uwb_stack, UWB_STACK_SIZE);
 static struct k_thread uwb_thread_data;
 
-/* --------------------------------------------------------------------------
- * main
- * -------------------------------------------------------------------------- */
-
 int main(void)
 {
 	LOG_INF("BLE Slave Timestamp Streamer starting");
@@ -372,10 +311,8 @@ int main(void)
 				   entry.drift,
 				   entry.corrected);
 
-		/* Always print to serial */
 		printk("%s", buf);
 
-		/* Send over BLE if laptop is connected and subscribed */
 		if (notify_enabled && current_conn) {
 			bt_gatt_notify(current_conn, TX_ATTR, buf, len);
 		}

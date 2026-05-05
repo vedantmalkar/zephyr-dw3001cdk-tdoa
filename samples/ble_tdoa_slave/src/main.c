@@ -1,7 +1,3 @@
-/*
- * BLE TDoA Slave — DWM3001CDK (CORRECTED)
- */
-
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/bluetooth/bluetooth.h>
@@ -15,9 +11,6 @@
 #include "port.h"
 
 LOG_MODULE_REGISTER(ble_tdoa_slave, LOG_LEVEL_INF);
-
-/* -------------------------------------------------------------------------- */
-
 #define NODE_ID   6
 #define ANT_DLY   26194
 #define MSG_SYNC  0x10
@@ -26,9 +19,6 @@ LOG_MODULE_REGISTER(ble_tdoa_slave, LOG_LEVEL_INF);
 #define MASK40  0xFFFFFFFFFFULL
 #define HALF40  (1LL << 39)
 #define FULL40  (1LL << 40)
-
-/* -------------------------------------------------------------------------- */
-
 struct tdoa_entry {
     uint8_t  id;
     uint8_t  type;
@@ -43,9 +33,6 @@ struct tdoa_entry {
 
 K_MSGQ_DEFINE(tdoa_queue, sizeof(struct tdoa_entry), 32, 4);
 
-/* -------------------------------------------------------------------------- */
-/* BLE UUIDs */
-
 #define BT_UUID_NUS_VAL \
     BT_UUID_128_ENCODE(0x6E400001, 0xB5A3, 0xF393, 0xE0A9, 0xE50E24DCCA9EULL)
 #define BT_UUID_NUS_TX_VAL \
@@ -53,14 +40,8 @@ K_MSGQ_DEFINE(tdoa_queue, sizeof(struct tdoa_entry), 32, 4);
 
 static struct bt_uuid_128 nus_uuid    = BT_UUID_INIT_128(BT_UUID_NUS_VAL);
 static struct bt_uuid_128 nus_tx_uuid = BT_UUID_INIT_128(BT_UUID_NUS_TX_VAL);
-
-/* -------------------------------------------------------------------------- */
-
 static struct bt_conn *current_conn;
 static bool notify_enabled;
-
-/* -------------------------------------------------------------------------- */
-
 static void tx_ccc_changed(const struct bt_gatt_attr *attr, uint16_t value)
 {
     notify_enabled = (value == BT_GATT_CCC_NOTIFY);
@@ -76,9 +57,6 @@ BT_GATT_SERVICE_DEFINE(nus_svc,
 );
 
 #define TX_ATTR (&nus_svc.attrs[1])
-
-/* -------------------------------------------------------------------------- */
-
 static const struct bt_le_adv_param adv_param =
     BT_LE_ADV_PARAM_INIT(BT_LE_ADV_OPT_CONN,
         BT_GAP_ADV_FAST_INT_MIN_2,
@@ -94,9 +72,6 @@ static const struct bt_data sd[] = {
     BT_DATA(BT_DATA_NAME_COMPLETE, CONFIG_BT_DEVICE_NAME,
         sizeof(CONFIG_BT_DEVICE_NAME) - 1),
 };
-
-/* -------------------------------------------------------------------------- */
-
 static void connected(struct bt_conn *conn, uint8_t err)
 {
     if (err) return;
@@ -115,9 +90,6 @@ BT_CONN_CB_DEFINE(conn_cb) = {
     .connected    = connected,
     .disconnected = disconnected,
 };
-
-/* -------------------------------------------------------------------------- */
-
 static dwt_config_t uwb_cfg = {
     .chan = 9,
     .txPreambLength = DWT_PLEN_128,
@@ -133,9 +105,6 @@ static dwt_config_t uwb_cfg = {
     .stsLength = DWT_STS_LEN_64,
     .pdoaMode = DWT_PDOA_M0,
 };
-
-/* -------------------------------------------------------------------------- */
-
 static int uwb_init(void)
 {
     dw_device_init();
@@ -160,9 +129,6 @@ static int uwb_init(void)
 
     return 0;
 }
-
-/* -------------------------------------------------------------------------- */
-
 static uint64_t get_rx_ts(void)
 {
     uint8_t ts[5];
@@ -174,9 +140,6 @@ static uint64_t get_rx_ts(void)
     }
     return val;
 }
-
-/* -------------------------------------------------------------------------- */
-
 #define UWB_STACK_SIZE 4096
 #define UWB_PRIORITY   5
 
@@ -206,9 +169,6 @@ static void uwb_rx_thread(void *a, void *b, void *c)
         dwt_readrxdata(rx_buf, len - FCS_LEN, 0);
 
         uint64_t rx_time = get_rx_ts();
-
-        /* ---------- BLINK ---------- */
-
         if (rx_buf[0] == MSG_BLINK) {
 
             struct tdoa_entry entry = {
@@ -233,9 +193,7 @@ static void uwb_rx_thread(void *a, void *b, void *c)
                 k_msgq_put(&tdoa_queue, &entry, K_NO_WAIT);
             }
         }
-
-        /* ---------- SYNC ---------- */
-
+        
         if (rx_buf[0] == MSG_SYNC) {
 
             uint8_t seq = rx_buf[1];
@@ -283,14 +241,8 @@ static void uwb_rx_thread(void *a, void *b, void *c)
         dwt_writesysstatuslo(DWT_INT_RXFCG_BIT_MASK | SYS_STATUS_ALL_RX_ERR);
     }
 }
-
-/* -------------------------------------------------------------------------- */
-
 K_THREAD_STACK_DEFINE(uwb_stack, UWB_STACK_SIZE);
 static struct k_thread uwb_thread_data;
-
-/* -------------------------------------------------------------------------- */
-
 int main(void)
 {
     if (uwb_init() != 0) return -1;

@@ -1,5 +1,3 @@
-/* SLAVE ANCHOR */
-
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
@@ -34,7 +32,6 @@ static dwt_config_t config = {
     .pdoaMode = DWT_PDOA_M0,
 };
 
-/* RX timestamp */
 
 static uint64_t get_rx_ts(void)
 {
@@ -49,7 +46,6 @@ static uint64_t get_rx_ts(void)
     return val;
 }
 
-/* INIT */
 
 static int uwb_init(void)
 {
@@ -76,7 +72,6 @@ static int uwb_init(void)
     return 0;
 }
 
-/* SYNC RECEIVER */
 
 static void slave_loop(void)
 {

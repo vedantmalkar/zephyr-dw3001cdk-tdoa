@@ -61,8 +61,6 @@ def compute_position(seq_data):
         return (result.x[0], result.x[1])
     return None
 
-# ------------------------------------------------------------------
-
 def process_packet(node_id, seq, master_time):
 
     data_store[seq][node_id] = master_time
@@ -89,8 +87,6 @@ def process_packet(node_id, seq, master_time):
         # Cleanup
         del data_store[seq]
 
-# ------------------------------------------------------------------
-
 def make_callback():
     def callback(_, data: bytearray):
         try:
@@ -109,8 +105,6 @@ def make_callback():
 
     return callback
 
-# ------------------------------------------------------------------
-
 async def connect_device(device):
 
     while True:
@@ -126,8 +120,6 @@ async def connect_device(device):
         except Exception as e:
             print(f"Reconnect {device.address}: {e}")
             await asyncio.sleep(2)
-
-# ------------------------------------------------------------------
 
 async def main():
 
@@ -146,7 +138,5 @@ async def main():
         return
 
     await asyncio.gather(*(connect_device(d) for d in targets))
-
-# ------------------------------------------------------------------
 
 asyncio.run(main())

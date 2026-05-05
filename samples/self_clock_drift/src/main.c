@@ -1,5 +1,5 @@
 /*
- * self_clock_drift.c — Single-board clock drift measurement via TX timestamps.
+ * self_clock_drift.c - Single-board clock drift measurement via TX timestamps.
  *
  * No second board needed.
  * Sends a probe packet every INTERVAL_MS, reads the 40-bit DW3000 TX timestamp,
@@ -9,7 +9,7 @@
  * Uses consecutive-pair comparison (not cumulative) to avoid the 40-bit counter
  * rollover that occurs every ~17.2 s.
  *
- * Expected output (~1–5 ppm typical for a healthy crystal):
+ * Expected output (~1-5 ppm typical for a healthy crystal):
  *   [DRIFT] interval=1009 ms  ticks=64462984192  expected=64462278000  drift=10.96 ppm
  */
 
@@ -141,7 +141,7 @@ int main(void)
          * representation is correct (avoids the %u%08u concatenation bug).
          *
          * tick_delta ≈ 63.9 billion for a 1 s interval, so:
-         *   billions  = tick_delta / 1,000,000,000  (0–63 for 1 s)
+         *   billions  = tick_delta / 1,000,000,000  (0-63 for 1 s)
          *   remainder = tick_delta % 1,000,000,000  (always 9 digits)
          */
         uint32_t tick_b = (uint32_t)(tick_delta    / 1000000000ULL);

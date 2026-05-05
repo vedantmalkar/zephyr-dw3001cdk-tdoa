@@ -121,7 +121,7 @@ static void slave_loop(void)
 
         uint64_t rx_time = get_rx_ts();
 
-        /* ---------------- BLINK ---------------- */
+        /* BLINK */
 
         if(rx_buf[0]==MSG_BLINK)
         {
@@ -140,7 +140,7 @@ static void slave_loop(void)
             }
         }
 
-        /* ---------------- SYNC ---------------- */
+        /* SYNC */
 
         if(rx_buf[0]==MSG_SYNC)
         {

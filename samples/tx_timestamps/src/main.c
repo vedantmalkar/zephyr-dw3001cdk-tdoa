@@ -1,5 +1,5 @@
 /*
- * tx_timestamps.c — Transmit blinks and print the 40-bit TX timestamp for each.
+ * tx_timestamps.c - Transmit blinks and print the 40-bit TX timestamp for each.
  *
  * Self-contained: no second board needed.
  * Sends a 3-byte blink every TX_INTERVAL_MS and logs the DW3000 TX timestamp.

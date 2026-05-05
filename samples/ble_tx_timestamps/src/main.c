@@ -1,22 +1,9 @@
 /*
- * BLE TX Timestamp Streamer — DWM3001CDK
+ * BLE TX Timestamp Streamer - DWM3001CDK
  *
  * Transmits a UWB blink every 100 ms, reads the 40-bit hardware TX timestamp,
  * prints it on the serial console, and sends it to a connected laptop over BLE
- * (Nordic UART Service — TX notify characteristic).
- *
- * Format sent over BLE and serial:
- *   "seq=<n>  ts=<decimal>\n"
- *
- * No second UWB device needed — the chip transmits to itself.
- *
- * Architecture:
- *   uwb_tx_thread  — transmit blink → wait TXFRS → read TX timestamp → msgq
- *   main thread    — BLE init + advertising + dequeue msgq → notify + printk
- *
- * Build:
- *   cd samples/ble_tx_timestamps
- *   west build -b decawave_dwm3001cdk
+ * (Nordic UART Service - TX notify characteristic).
  */
 
 #include <zephyr/kernel.h>
@@ -33,20 +20,12 @@
 
 LOG_MODULE_REGISTER(ble_tx_ts, LOG_LEVEL_INF);
 
-/* --------------------------------------------------------------------------
- * Message queue — UWB TX thread → main/BLE thread
- * -------------------------------------------------------------------------- */
-
 struct ts_entry {
 	uint8_t  seq;
 	uint64_t tx_ts;
 };
 
 K_MSGQ_DEFINE(ts_queue, sizeof(struct ts_entry), 32, 4);
-
-/* --------------------------------------------------------------------------
- * NUS UUIDs
- * -------------------------------------------------------------------------- */
 
 #define BT_UUID_NUS_VAL \
 	BT_UUID_128_ENCODE(0x6E400001, 0xB5A3, 0xF393, 0xE0A9, 0xE50E24DCCA9EULL)
@@ -56,16 +35,8 @@ K_MSGQ_DEFINE(ts_queue, sizeof(struct ts_entry), 32, 4);
 static struct bt_uuid_128 nus_uuid    = BT_UUID_INIT_128(BT_UUID_NUS_VAL);
 static struct bt_uuid_128 nus_tx_uuid = BT_UUID_INIT_128(BT_UUID_NUS_TX_VAL);
 
-/* --------------------------------------------------------------------------
- * BLE state
- * -------------------------------------------------------------------------- */
-
 static struct bt_conn *current_conn;
 static bool notify_enabled;
-
-/* --------------------------------------------------------------------------
- * GATT
- * -------------------------------------------------------------------------- */
 
 static void tx_ccc_changed(const struct bt_gatt_attr *attr, uint16_t value)
 {
@@ -84,10 +55,6 @@ BT_GATT_SERVICE_DEFINE(nus_svc,
 
 #define TX_ATTR (&nus_svc.attrs[1])
 
-/* --------------------------------------------------------------------------
- * Advertising
- * -------------------------------------------------------------------------- */
-
 static const struct bt_le_adv_param adv_param =
 	BT_LE_ADV_PARAM_INIT(BT_LE_ADV_OPT_CONN,
 			     BT_GAP_ADV_FAST_INT_MIN_2,
@@ -104,10 +71,6 @@ static const struct bt_data sd[] = {
 		sizeof(CONFIG_BT_DEVICE_NAME) - 1),
 };
 
-/* --------------------------------------------------------------------------
- * MTU exchange
- * -------------------------------------------------------------------------- */
-
 static void mtu_exchange_cb(struct bt_conn *conn, uint8_t err,
 			    struct bt_gatt_exchange_params *params)
 {
@@ -121,10 +84,6 @@ static void mtu_exchange_cb(struct bt_conn *conn, uint8_t err,
 static struct bt_gatt_exchange_params mtu_params = {
 	.func = mtu_exchange_cb,
 };
-
-/* --------------------------------------------------------------------------
- * Connection callbacks
- * -------------------------------------------------------------------------- */
 
 static void connected(struct bt_conn *conn, uint8_t err)
 {
@@ -150,10 +109,6 @@ BT_CONN_CB_DEFINE(conn_cb) = {
 	.connected    = connected,
 	.disconnected = disconnected,
 };
-
-/* --------------------------------------------------------------------------
- * DW3000 config and init
- * -------------------------------------------------------------------------- */
 
 static dwt_config_t uwb_cfg = {
 	.chan           = 9,
@@ -201,10 +156,6 @@ static int uwb_init(void)
 	return 0;
 }
 
-/* --------------------------------------------------------------------------
- * UWB TX thread — transmit blink every 100ms, read TX timestamp, enqueue
- * -------------------------------------------------------------------------- */
-
 #define UWB_STACK_SIZE 4096
 #define UWB_PRIORITY   5
 
@@ -227,7 +178,6 @@ static void uwb_tx_thread(void *a, void *b, void *c)
 		dwt_writetxfctrl(sizeof(msg) + FCS_LEN, 0, 0);
 		dwt_starttx(DWT_START_TX_IMMEDIATE);
 
-		/* Wait for TX done */
 		while (!(dwt_readsysstatuslo() & DWT_INT_TXFRS_BIT_MASK)) {
 		}
 
@@ -258,10 +208,6 @@ static void uwb_tx_thread(void *a, void *b, void *c)
 K_THREAD_STACK_DEFINE(uwb_stack, UWB_STACK_SIZE);
 static struct k_thread uwb_thread_data;
 
-/* --------------------------------------------------------------------------
- * main
- * -------------------------------------------------------------------------- */
-
 int main(void)
 {
 	LOG_INF("BLE TX Timestamp Streamer starting");
@@ -271,8 +217,6 @@ int main(void)
 		return -1;
 	}
 	LOG_INF("DW3000 ready");
-
-	/* Start UWB TX thread only after full DW3000 init */
 	k_thread_create(&uwb_thread_data, uwb_stack, UWB_STACK_SIZE,
 			uwb_tx_thread, NULL, NULL, NULL,
 			UWB_PRIORITY, 0, K_NO_WAIT);
@@ -294,16 +238,13 @@ int main(void)
 	char buf[32];
 
 	while (1) {
-		/* Block until UWB thread enqueues a timestamp */
 		k_msgq_get(&ts_queue, &entry, K_FOREVER);
 
 		int len = snprintf(buf, sizeof(buf), "seq=%u ts=%llu\n",
 				   entry.seq, entry.tx_ts);
 
-		/* Always print to serial */
 		printk("%s", buf);
 
-		/* Send over BLE only if laptop is connected and subscribed */
 		if (notify_enabled && current_conn) {
 			bt_gatt_notify(current_conn, TX_ATTR, buf, len);
 		}

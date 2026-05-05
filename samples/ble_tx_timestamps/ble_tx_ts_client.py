@@ -42,7 +42,7 @@ async def main(name: str, addr: str | None) -> None:
 
     print(f"Connecting to {target} ...")
     async with BleakClient(target) as client:
-        print("Connected. Receiving TX timestamps — Ctrl-C to stop.\n")
+        print("Connected. Receiving TX timestamps - Ctrl-C to stop.\n")
         await client.start_notify(NUS_TX_UUID, on_notification)
         try:
             while True:

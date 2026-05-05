@@ -24,12 +24,10 @@ NUS_TX_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
 
 HEADER = ["seq", "tx_ts", "rx_ts", "offset", "drift", "corrected"]
 
-
 def parse_args():
     p = argparse.ArgumentParser(description="BLE slave timestamp receiver")
     p.add_argument("--log", metavar="FILE", help="CSV file to log data (appended)")
     return p.parse_args()
-
 
 async def run(log_path):
     print(f"Scanning for '{DEVICE_NAME}'...")
@@ -88,7 +86,7 @@ async def run(log_path):
     async with BleakClient(device) as client:
         print(f"Connected (MTU={client.mtu_size})")
         await client.start_notify(NUS_TX_UUID, on_notify)
-        print(f"Subscribed to NUS TX. Receiving timestamps — press Ctrl+C to stop.\n")
+        print(f"Subscribed to NUS TX. Receiving timestamps - press Ctrl+C to stop.\n")
         print(f"{'seq':>6}  {'tx_ts':>20}  {'rx_ts':>20}  {'offset':>12}  {'drift':>14}  {'corrected':>20}")
         print("-" * 100)
         try:
@@ -102,11 +100,9 @@ async def run(log_path):
     if csv_file:
         csv_file.close()
 
-
 def main():
     args = parse_args()
     asyncio.run(run(args.log))
-
 
 if __name__ == "__main__":
     main()

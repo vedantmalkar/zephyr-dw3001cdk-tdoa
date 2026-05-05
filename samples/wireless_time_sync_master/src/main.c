@@ -10,8 +10,6 @@
 
 LOG_MODULE_REGISTER(tdoa_master, LOG_LEVEL_INF);
 
-/* ================= USER CONFIG ================= */
-
 #define NODE_ID 1
 #define ANT_DLY 26194
 
@@ -19,7 +17,6 @@ LOG_MODULE_REGISTER(tdoa_master, LOG_LEVEL_INF);
 #define SYNC_PERIOD_MS 100
 #define UUS_TO_DWT_TIME 63898
 
-/* =============================================== */
 
 static dwt_config_t config = {
     .chan = 9,
@@ -37,7 +34,6 @@ static dwt_config_t config = {
     .pdoaMode = DWT_PDOA_M0,
 };
 
-/* ================= TIMESTAMP HELPER ================= */
 
 static uint64_t get_tx_ts(void)
 {
@@ -51,8 +47,6 @@ static uint64_t get_tx_ts(void)
 
     return val;
 }
-
-/* ================= UWB INIT ================= */
 
 static int uwb_init(void)
 {
@@ -78,8 +72,6 @@ static int uwb_init(void)
 
     return 0;
 }
-
-/* ================= MASTER LOOP ================= */
 
 static void master_sync_loop(void)
 {
@@ -122,7 +114,6 @@ static void master_sync_loop(void)
 
         last_tx_time = get_tx_ts();
 
-        /* CSV output */
 
         LOG_INF("MASTER,%u,%llu", seq, last_tx_time);
 

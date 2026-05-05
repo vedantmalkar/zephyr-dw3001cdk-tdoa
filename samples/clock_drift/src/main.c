@@ -1,5 +1,5 @@
 /*
- * clock_drift.c — DW3000 clock drift measurement sample
+ * clock_drift.c - DW3000 clock drift measurement sample
  *
  * DRIFT_MODE 0: Single-chip self-test (no second board needed)
  *               Compares DW3000 tick counter against Zephyr wall clock.
@@ -21,31 +21,21 @@
 
 LOG_MODULE_REGISTER(clock_drift, LOG_LEVEL_INF);
 
-/* ── Mode select ─────────────────────────────────────────────────────────── */
 #define DRIFT_MODE  0
-/* 0 = single-chip self-test  (no second board)
- * 1 = TX blinks              (paired with mode 2)
- * 2 = RX drift measurement   (reads CI/CO from received blinks) */
 
-/* ── Clock constants ─────────────────────────────────────────────────────── */
-/* DW3000: 499.2 MHz × 128 = 63,897,600,000 ticks / second */
 #define DW_TICKS_PER_SEC        63897600000ULL
 #define DW_TICKS_PER_MS         (DW_TICKS_PER_SEC / 1000ULL)
 
-/* Carrier integrator → Hz conversion */
 #define FREQ_OFFSET_MULTIPLIER      (998.4e6 / 2.0 / 1024.0 / 131072.0)
-/* Hz → ppm for channel 9 (centre 7987.2 MHz) */
+
 #define HERTZ_TO_PPM_MULTIPLIER_CH9 (-1.0e6 / 7987.2e6)
 
-/* 40-bit counter rollover mask */
 #define TS_MASK_40BIT   0xFFFFFFFFFFULL
 
-/* ── Mode-specific tunables ───────────────────────────────────────────────── */
 #define SELF_TEST_INTERVAL_MS   1000
 #define BLINK_INTERVAL_MS       100
-#define DRIFT_WINDOW            16      /* packets to average before logging */
+#define DRIFT_WINDOW            16     
 
-/* ── UWB config (identical to simple_rx_tx.c) ────────────────────────────── */
 static dwt_config_t uwb_cfg = {
     .chan           = 9,
     .txPreambLength = DWT_PLEN_128,
@@ -62,7 +52,6 @@ static dwt_config_t uwb_cfg = {
     .pdoaMode       = DWT_PDOA_M0,
 };
 
-/* ── Init (verbatim from simple_rx_tx.c) ─────────────────────────────────── */
 static int uwb_init(void)
 {
     dw_device_init();
@@ -94,10 +83,7 @@ static int uwb_init(void)
 
     return 0;
 }
-
-/* ── Helpers ─────────────────────────────────────────────────────────────── */
-
-/* Read 40-bit RX timestamp from 5-byte little-endian buffer */
+,
 static uint64_t read_rx_ts(void)
 {
     uint8_t buf[5];
@@ -109,7 +95,6 @@ static uint64_t read_rx_ts(void)
     return ts;
 }
 
-/* ── DRIFT_MODE 0: single-chip self-test ────────────────────────────────── */
 #if DRIFT_MODE == 0
 
 static void self_test_loop(void)
@@ -138,11 +123,6 @@ static void self_test_loop(void)
 
         uint32_t elapsed_wall_ms = wall_ms - wall_first;
 
-        /*
-         * dwt_readsystimestamphi32() returns the high 32 bits of the 40-bit
-         * counter.  Shifting left by 8 maps it back into the 40-bit space,
-         * giving ~4 ms resolution — sufficient for ppm estimation over seconds.
-         */
         uint64_t ticks_actual   = ((uint64_t)(sys_hi - sys_hi_first)) << 8;
         uint64_t ticks_expected = (uint64_t)elapsed_wall_ms * DW_TICKS_PER_MS;
 
@@ -152,8 +132,6 @@ static void self_test_loop(void)
                         / (double)ticks_expected * 1e6;
         }
 
-        /* Log with integer arithmetic for ticks (no float format specifier
-         * issues on all Zephyr configs) then drift as fixed-point. */
         int32_t drift_ppm_int  = (int32_t)drift_ppm;
         int32_t drift_ppm_frac = (int32_t)((drift_ppm - drift_ppm_int) * 100);
         if (drift_ppm_frac < 0) {
@@ -168,7 +146,6 @@ static void self_test_loop(void)
     }
 }
 
-/* ── DRIFT_MODE 1: TX blinks ─────────────────────────────────────────────── */
 #elif DRIFT_MODE == 1
 
 static uint8_t tx_msg[] = {0xAB, 0xCD, 0x00};
@@ -208,7 +185,6 @@ static void tx_loop(void)
     }
 }
 
-/* ── DRIFT_MODE 2: RX drift measurement ─────────────────────────────────── */
 #elif DRIFT_MODE == 2
 
 static void rx_drift_loop(void)
@@ -216,12 +192,10 @@ static void rx_drift_loop(void)
     uint8_t  rx_buffer[128];
     uint32_t status;
 
-    /* Rolling window accumulators */
     double   sum_ci   = 0.0;
     double   sum_co   = 0.0;
     int      win_cnt  = 0;
 
-    /* Long-term cumulative drift state */
     uint64_t ts_first    = 0;
     uint32_t wall_first  = 0;
     bool     have_first  = false;
@@ -235,43 +209,36 @@ static void rx_drift_loop(void)
                  (DWT_INT_RXFCG_BIT_MASK | SYS_STATUS_ALL_RX_ERR))) {}
 
         if (!(status & DWT_INT_RXFCG_BIT_MASK)) {
-            /* RX error — clear, re-enable, continue */
             dwt_writesysstatuslo(SYS_STATUS_ALL_RX_ERR | SYS_STATUS_ALL_RX_TO);
             dwt_rxenable(DWT_START_RX_IMMEDIATE);
             continue;
         }
 
-        /* Good frame: read timestamp first */
         uint64_t rx_ts = read_rx_ts();
         uint32_t wall_now = k_uptime_get_32();
 
         uint16_t len = dwt_getframelength();
         dwt_readrxdata(rx_buffer, len - FCS_LEN, 0);
 
-        /* Carrier integrator → ppm */
         int32_t ci_raw = dwt_readcarrierintegrator();
         double ppm_ci  = (double)ci_raw
                          * FREQ_OFFSET_MULTIPLIER
                          * HERTZ_TO_PPM_MULTIPLIER_CH9;
 
-        /* Clock offset → ppm */
         int16_t co_raw = dwt_readclockoffset();
         double ppm_co  = (double)co_raw / 16.0;
 
-        /* Clear status */
         dwt_writesysstatuslo(DWT_INT_RXFCG_BIT_MASK |
                              SYS_STATUS_ALL_RX_ERR  |
                              SYS_STATUS_ALL_RX_TO);
         dwt_rxenable(DWT_START_RX_IMMEDIATE);
 
-        /* First-packet reference for cumulative drift */
         if (!have_first) {
             ts_first   = rx_ts;
             wall_first = wall_now;
             have_first = true;
         }
 
-        /* Accumulate rolling window */
         sum_ci  += ppm_ci;
         sum_co  += ppm_co;
         win_cnt++;
@@ -282,7 +249,6 @@ static void rx_drift_loop(void)
             double avg_ci = sum_ci / (double)DRIFT_WINDOW;
             double avg_co = sum_co / (double)DRIFT_WINDOW;
 
-            /* 40-bit rollover-safe elapsed ticks */
             uint64_t elapsed_ticks = (rx_ts - ts_first) & TS_MASK_40BIT;
             uint32_t elapsed_wall_ms = wall_now - wall_first;
 
@@ -293,7 +259,6 @@ static void rx_drift_loop(void)
                 cumul_ppm = (ticks_per_ms_actual / (double)DW_TICKS_PER_MS - 1.0) * 1e6;
             }
 
-            /* Format ppm values as integer + fractional for portability */
             int32_t ci_int  = (int32_t)avg_ci;
             int32_t ci_frac = (int32_t)((avg_ci - ci_int) * 100);
             int32_t co_int  = (int32_t)avg_co;
@@ -311,7 +276,6 @@ static void rx_drift_loop(void)
                     co_int, co_frac,
                     cu_int, cu_frac);
 
-            /* Reset rolling accumulators */
             sum_ci  = 0.0;
             sum_co  = 0.0;
             win_cnt = 0;
@@ -323,7 +287,6 @@ static void rx_drift_loop(void)
 #error "DRIFT_MODE must be 0, 1, or 2"
 #endif
 
-/* ── main ────────────────────────────────────────────────────────────────── */
 int main(void)
 {
     LOG_INF("clock_drift sample  (DRIFT_MODE=%d)", DRIFT_MODE);

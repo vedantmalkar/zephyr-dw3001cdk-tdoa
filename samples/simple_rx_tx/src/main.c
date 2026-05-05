@@ -160,7 +160,6 @@ static void rx_loop(void){
 
 #endif
 
-
 int main(void){
 
     LOG_INF("Starting up board");

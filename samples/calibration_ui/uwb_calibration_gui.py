@@ -13,9 +13,6 @@ running = False
 samples = []
 delay = 26194
 
-
-# ---------------- SERIAL CONNECT ----------------
-
 def connect():
 
     global ser
@@ -31,16 +28,10 @@ def connect():
         log("Connection failed: " + str(e))
         status_label.config(text="NOT CONNECTED", fg="red")
 
-
-# ---------------- LOGGING ----------------
-
 def log(msg):
 
     log_box.insert(tk.END, msg + "\n")
     log_box.see(tk.END)
-
-
-# ---------------- SERIAL READER ----------------
 
 def read_serial():
 
@@ -63,9 +54,6 @@ def read_serial():
         except:
             pass
 
-
-# ---------------- START SAMPLING ----------------
-
 def start_sampling():
 
     global running
@@ -84,18 +72,12 @@ def start_sampling():
 
     log("Sampling started")
 
-
-# ---------------- STOP SAMPLING ----------------
-
 def stop_sampling():
 
     global running
 
     running = False
     log("Sampling stopped")
-
-
-# ---------------- CALIBRATION ----------------
 
 def calibrate():
 
@@ -126,9 +108,6 @@ def calibrate():
 
     log(f"New antenna delay = {delay}")
 
-
-# ---------------- ANIMATION ----------------
-
 def animate():
 
     if running:
@@ -142,16 +121,10 @@ def animate():
 
         root.after(400, animate)
 
-
-# ---------------- UI ----------------
-
 root = tk.Tk()
 root.title("UWB Calibration Tool")
 root.geometry("900x650")
 root.configure(bg="#0b0b0b")
-
-
-# ---------------- HEADER ----------------
 
 title = tk.Label(
     root,
@@ -183,9 +156,6 @@ instruction = tk.Label(
 
 instruction.pack(pady=5)
 
-
-# ---------------- DEVICE DIAGRAM ----------------
-
 canvas = tk.Canvas(root, width=620, height=70, bg="#0b0b0b", highlightthickness=0)
 canvas.pack()
 
@@ -198,9 +168,6 @@ canvas.create_text(310,20,text="50 cm",fill="white",font=("Segoe UI",10))
 
 canvas.create_text(85,65,text="Device A",fill="white",font=("Segoe UI",9))
 canvas.create_text(535,65,text="Device B",fill="white",font=("Segoe UI",9))
-
-
-# ---------------- CONTROL PANEL ----------------
 
 frame = tk.Frame(root, bg="#0b0b0b")
 frame.pack(pady=15)
@@ -226,9 +193,6 @@ connect_btn.grid(row=0, column=2, padx=8)
 
 status_label = tk.Label(frame, text="NOT CONNECTED", fg="red", bg="#0b0b0b", font=("Segoe UI",10))
 status_label.grid(row=0, column=3, padx=10)
-
-
-# ---------------- CONTROL BUTTONS ----------------
 
 start_btn = tk.Button(
     frame,
@@ -266,9 +230,6 @@ cal_btn = tk.Button(
 
 cal_btn.grid(row=1, column=2)
 
-
-# ---------------- LIVE VALUES ----------------
-
 dist_var = tk.StringVar(value="0.000 m")
 avg_var = tk.StringVar(value="0.000 m")
 delay_var = tk.StringVar(value=str(delay))
@@ -288,9 +249,6 @@ tk.Label(live_frame, textvariable=delay_var, fg="#00ffa6", bg="#0b0b0b", font=("
 
 tk.Label(live_frame, textvariable=indicator_var, fg="#00ffa6", bg="#0b0b0b", font=("Segoe UI",14)).grid(row=3, column=1)
 
-
-# ---------------- LOG CONSOLE ----------------
-
 log_box = tk.Text(
     root,
     height=7,
@@ -302,6 +260,5 @@ log_box = tk.Text(
 )
 
 log_box.pack(pady=15)
-
 
 root.mainloop()

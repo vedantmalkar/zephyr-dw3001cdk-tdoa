@@ -41,7 +41,6 @@ all_entries = []
 quiet_mode = False
 _json_saved = False
 
-
 def _save_json():
     global _json_saved
     if _json_saved or not all_entries:
@@ -52,14 +51,11 @@ def _save_json():
         json.dump(all_entries, f, indent=2)
     print(f"\nSaved {len(all_entries)} entries to {path}")
 
-
 atexit.register(_save_json)
-
 
 def _sigint_handler(sig, frame):
     _save_json()
     sys.exit(0)
-
 
 signal.signal(signal.SIGINT, _sigint_handler)
 
@@ -68,7 +64,7 @@ DWT_TIME_UNIT_S = 1.0 / (499.2e6 * 128.0)
 SPEED_OF_LIGHT_M_S = 299_792_458.0
 
 # Aggregate same BLINK observed by multiple anchors.
-# Key = blink_seq only (uint8 set by the tag frame — identical on every anchor
+# Key = blink_seq only (uint8 set by the tag frame - identical on every anchor
 # that receives the same blink, regardless of which sync they last processed).
 # No TTL: a sequence number naturally overwrites its entry when the uint8 wraps
 # (~25 s at 10 Hz), so old groups never pile up.
@@ -80,7 +76,6 @@ anchor_positions = {
     0: (0.9, 0.0),
     6: (0.9, 0.6),
 }
-
 
 def parse_args():
     p = argparse.ArgumentParser(description="Connect to multiple DWM3001-TDOA slaves over BLE")
@@ -95,7 +90,6 @@ def parse_args():
                    help="Only print position (x, y) output")
     return p.parse_args()
 
-
 def parse_anchor_positions(items):
     positions = {}
     for item in items:
@@ -109,21 +103,15 @@ def parse_anchor_positions(items):
             raise ValueError(f"invalid --anchor '{item}', expected ID:X,Y") from exc
         positions[aid] = (x, y)
     return positions
-
-
-# --------------------------------------------------------------------------
-# Shared CSV writer (protected by asyncio — single-threaded event loop)
-# --------------------------------------------------------------------------
+# Shared CSV writer (protected by asyncio - single-threaded event loop)
 
 csv_file   = None
 csv_writer = None
-
 
 def log_row(row: list):
     if csv_writer:
         csv_writer.writerow(row)
         csv_file.flush()
-
 
 def solve_tdoa_2d(ref_id: int, ref_xy, obs):
     # obs: list of (anchor_id, (x,y), delta_range_m), where delta_range_m = ri-rref
@@ -182,7 +170,6 @@ def solve_tdoa_2d(ref_id: int, ref_xy, obs):
     # Return last iterate even if not fully converged.
     rms = math.sqrt(rss / max(len(obs), 1))
     return x, y, rms
-
 
 def update_tdoa(ts: str, sync_seq: int, blink_seq: int, anchor_id: int, corrected: float, sync_tx: int = 0):
     key = blink_seq
@@ -303,11 +290,7 @@ def update_tdoa(ts: str, sync_seq: int, blink_seq: int, anchor_id: int, correcte
                     )
 
     group["reported"] = count
-
-
-# --------------------------------------------------------------------------
 # Per-device handler
-# --------------------------------------------------------------------------
 
 async def handle_device(device, stop_event: asyncio.Event):
     addr  = device.address
@@ -419,11 +402,7 @@ async def handle_device(device, stop_event: asyncio.Event):
                 pass
 
     print(f"  [{short}] handler exited")
-
-
-# --------------------------------------------------------------------------
 # Main
-# --------------------------------------------------------------------------
 
 async def main(scan_time: float, log_path: str):
     global csv_file, csv_writer
@@ -447,8 +426,6 @@ async def main(scan_time: float, log_path: str):
                 "delta_m", "anchor_sep_m"
             ])
         print(f"Logging to {log_path}")
-
-    # ---- Scan ----
     found = {}
 
     def detection_cb(device, adv_data):
@@ -487,7 +464,6 @@ async def main(scan_time: float, log_path: str):
 
     print("Done.")
 
-
 def entry():
     args = parse_args()
     global anchor_positions, quiet_mode
@@ -502,7 +478,6 @@ def entry():
         asyncio.run(main(args.scan_time, args.log))
     except KeyboardInterrupt:
         pass
-
 
 if __name__ == "__main__":
     entry()

@@ -170,7 +170,7 @@ static void responder_loop(void)
             dwt_writetxdata(sizeof(resp_msg), resp_msg, 0);
             dwt_writetxfctrl(sizeof(resp_msg) + FCS_LEN, 0, 0);
             if (dwt_starttx(DWT_START_TX_DELAYED) != DWT_SUCCESS) {
-                LOG_WRN("Delayed TX failed — too late");
+                LOG_WRN("Delayed TX failed - too late");
             }
             while (!(dwt_readsysstatuslo() & DWT_INT_TXFRS_BIT_MASK));
             dwt_writesysstatuslo(DWT_INT_TXFRS_BIT_MASK);

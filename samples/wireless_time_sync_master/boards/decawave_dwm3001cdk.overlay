@@ -1,0 +1,14 @@
+// SPI property defined cause UWB module uses SPI connection
+
+&spi3 {
+    dwm3000: dw3000@0 {
+        compatible = "qorvo,dw3000";
+        spi-max-frequency = <32000000>;
+        status = "okay";
+        reg = <0>;
+        reset-gpios = <&gpio0 25 GPIO_ACTIVE_LOW>;
+        irq-gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;
+        wakeup-gpios = <&gpio1 19 GPIO_ACTIVE_HIGH>;
+        cs-gpios = <&gpio1 6 GPIO_ACTIVE_LOW>;
+    };
+};

@@ -1,4 +1,4 @@
-/* TDOA TAG (BLINK TRANSMITTER) */
+/* MASTER ANCHOR */
 
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
@@ -8,11 +8,15 @@
 #include "dw3000_hw.h"
 #include "port.h"
 
-LOG_MODULE_REGISTER(tdoa_tag, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(tdoa_master, LOG_LEVEL_INF);
 
+#define NODE_ID 1
 #define ANT_DLY 26194
 
-#define MSG_BLINK 0x20
+#define MSG_SYNC 0x10
+#define SYNC_PERIOD_MS 100
+#define UUS_TO_DWT_TIME 63898
+
 
 static dwt_config_t config = {
     .chan = 9,
@@ -30,7 +34,19 @@ static dwt_config_t config = {
     .pdoaMode = DWT_PDOA_M0,
 };
 
-/* INIT */
+
+static uint64_t get_tx_ts(void)
+{
+    uint8_t ts[5];
+    dwt_readtxtimestamp(ts);
+
+    uint64_t val = 0;
+
+    for(int i=4;i>=0;i--)
+        val = (val<<8) | ts[i];
+
+    return val;
+}
 
 static int uwb_init(void)
 {
@@ -52,41 +68,64 @@ static int uwb_init(void)
         return -1;
 
     dwt_settxantennadelay(ANT_DLY);
+    dwt_setrxantennadelay(ANT_DLY);
 
     return 0;
 }
 
-/* BLINK LOOP */
-
-static void tag_loop(void)
+static void master_sync_loop(void)
 {
-    uint8_t tx_buf[2];
-    static uint8_t blink_seq = 0;
+    uint8_t sync_msg[16];
+
+    uint16_t seq = 0;
+
+    uint64_t next_tx_time;
+    uint64_t last_tx_time = 0;
+
+    uint8_t ts[5];
+    uint64_t now = 0;
+
+    dwt_readsystime(ts);
+
+    for(int i=4;i>=0;i--)
+        now = (now<<8) | ts[i];
+
+    next_tx_time = now + (SYNC_PERIOD_MS * 1000 * UUS_TO_DWT_TIME);
 
     while(1)
     {
-        tx_buf[0] = MSG_BLINK;
-        tx_buf[1] = blink_seq++;
+        sync_msg[0] = MSG_SYNC;
+        sync_msg[1] = seq;
+        sync_msg[2] = NODE_ID;
 
-        dwt_writetxdata(2, tx_buf, 0);
-        dwt_writetxfctrl(2 + FCS_LEN, 0, 0);
+        for(int i=0;i<5;i++)
+            sync_msg[3+i] = (last_tx_time>>(8*i));
 
-        dwt_starttx(DWT_START_TX_IMMEDIATE);
+        dwt_writetxdata(8, sync_msg, 0);
+        dwt_writetxfctrl(8+FCS_LEN,0,0);
+
+        dwt_setdelayedtrxtime(next_tx_time >> 8);
+        dwt_starttx(DWT_START_TX_DELAYED);
 
         while(!(dwt_readsysstatuslo() &
                DWT_INT_TXFRS_BIT_MASK));
 
         dwt_writesysstatuslo(DWT_INT_TXFRS_BIT_MASK);
 
-        LOG_INF("BLINK sent seq=%u", tx_buf[1]);
+        last_tx_time = get_tx_ts();
 
-        k_msleep(100);  // 10 Hz
+
+        LOG_INF("MASTER,%u,%llu", seq, last_tx_time);
+
+        next_tx_time += (SYNC_PERIOD_MS * 1000 * UUS_TO_DWT_TIME);
+
+        seq++;
     }
 }
 
 int main(void)
 {
-    LOG_INF("TDOA Tag Start");
+    LOG_INF("TDOA Master Anchor Start");
 
     if(uwb_init()!=0)
     {
@@ -94,7 +133,7 @@ int main(void)
         return -1;
     }
 
-    tag_loop();
+    master_sync_loop();
 
     return 0;
 }

@@ -10,6 +10,7 @@
 
 LOG_MODULE_REGISTER(tdoa_tag, LOG_LEVEL_INF);
 
+#define TAG_ID 1
 #define ANT_DLY 26194
 
 #define MSG_BLINK 0x20
@@ -66,7 +67,7 @@ static void tag_loop(void)
     while(1)
     {
         tx_buf[0] = MSG_BLINK;
-        tx_buf[1] = blink_seq++;
+        tx_buf[1] = blink_seq++;   // ✅ sequence number
 
         dwt_writetxdata(2, tx_buf, 0);
         dwt_writetxfctrl(2 + FCS_LEN, 0, 0);
@@ -78,7 +79,7 @@ static void tag_loop(void)
 
         dwt_writesysstatuslo(DWT_INT_TXFRS_BIT_MASK);
 
-        LOG_INF("BLINK sent seq=%u", tx_buf[1]);
+        LOG_INF("BLINK sent seq=%d", tx_buf[1]);
 
         k_msleep(100);  // 10 Hz
     }

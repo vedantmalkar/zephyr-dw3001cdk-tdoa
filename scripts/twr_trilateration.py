@@ -2,10 +2,6 @@
 """
 DS-TWR Trilateration Visualizer
 
-Reads distance measurements from the tag over serial,
-trilaterates the tag position from anchor distances,
-and plots it live.
-
 Usage:
   python3 twr_trilateration.py --live
   python3 twr_trilateration.py --live --port /dev/ttyACM1
@@ -43,15 +39,12 @@ MAX_RESIDUAL = 1.0        # max error per anchor to accept a solution (meters)
 MAX_SPREAD = 2.0          # max spread between triplet solutions (meters)
 TRAIL_LENGTH = 200        # how many past positions to show
 
-# Regex to parse: [00:00:55.474,365] <inf> ds_twr: Anchor 6: 0.30 m  seq=0
 PATTERN = re.compile(
     r"Anchor\s+(\d+):\s+(-?\d+\.?\d*)\s+m"
 )
 
-# ===================== TRILATERATION =====================
 
 def trilaterate_3(a1, a2, a3, d1, d2, d3):
-    """Solve 2D position from 3 anchor positions and distances."""
     x1, y1 = a1
     x2, y2 = a2
     x3, y3 = a3
@@ -74,7 +67,6 @@ def trilaterate_3(a1, a2, a3, d1, d2, d3):
 
 
 def residual_ok(x, y, anchor_ids, distances):
-    """Check that the solution is consistent with all used anchors."""
     for aid in anchor_ids:
         ax, ay = ANCHORS[aid]
         d_est = math.hypot(x - ax, y - ay)
@@ -84,10 +76,6 @@ def residual_ok(x, y, anchor_ids, distances):
 
 
 def compute_position(distances):
-    """
-    Try all combinations of 3 anchors, trilaterate each,
-    filter by residual, return median of good solutions.
-    """
     available = [aid for aid in distances if aid in ANCHORS]
 
     if len(available) < MIN_ANCHORS:
@@ -120,8 +108,6 @@ def compute_position(distances):
     return median(xs), median(ys), len(solutions)
 
 
-# ===================== VISUALIZATION =====================
-
 class LivePlot:
     def __init__(self):
         self.x_hist = deque(maxlen=TRAIL_LENGTH)
@@ -131,7 +117,6 @@ class LivePlot:
         self.fig, self.ax = plt.subplots(figsize=(10, 8))
         self._setup_axes()
 
-        # trail + current position
         self.trail_line, = self.ax.plot(
             [], [], "b-", alpha=0.3, linewidth=1.5, label="Trail"
         )
@@ -141,7 +126,6 @@ class LivePlot:
             label="Tag",
         )
 
-        # draw anchors
         ax_coords = list(ANCHORS.values())
         self.ax.scatter(
             [p[0] for p in ax_coords],
@@ -199,8 +183,6 @@ class LivePlot:
         return self.trail_line, self.pos_dot, self.info_text
 
 
-# ===================== SERIAL READER =====================
-
 def run_live(port, baud):
     print("=" * 60)
     print("DS-TWR Trilateration - Live Mode")
@@ -220,7 +202,6 @@ def run_live(port, baud):
     def update_frame(frame):
         nonlocal distances
 
-        # read several lines per frame for responsiveness
         for _ in range(20):
             try:
                 raw = ser.readline()
@@ -269,8 +250,6 @@ def run_live(port, baud):
         ser.close()
         print("Serial closed.")
 
-
-# ===================== MAIN =====================
 
 def main():
     parser = argparse.ArgumentParser(
